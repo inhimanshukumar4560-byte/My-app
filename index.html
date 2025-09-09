@@ -266,6 +266,7 @@
                 prefill: { name: userData.name, email: userData.email, contact: userData.phone },
                 handler: async (paymentResponse) => {
                     try {
+                        // Hum ab verification ke liye poora 'paymentResponse' object bhej rahe hain
                         const verificationResult = await verifyPaymentOnServer(paymentResponse);
                         if (verificationResult.status === 'success') {
                             await db.collection('users').doc(user.uid).update({
