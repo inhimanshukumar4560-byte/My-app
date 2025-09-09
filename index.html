@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shubhzone - Secure Profile & Payment</title>
+    <title>Shubhzone - Final & Corrected</title>
     
     <!-- Firebase SDK Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -201,7 +201,6 @@
     // SECTION 2: CORE LOGIC
     // =================================================================
     
-    // Jab page load ho, to check karo ki user kaun hai
     auth.onAuthStateChanged(async (user) => {
         if (user) {
             const userDoc = await db.collection('users').doc(user.uid).get();
@@ -219,7 +218,6 @@
         }
     });
 
-    // --- Profile Form Submit Logic ---
     profileForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         saveProfileBtn.disabled = true;
@@ -244,7 +242,6 @@
         }
     });
 
-    // --- Payment Button Click Logic ---
     paymentBtn.addEventListener('click', async () => {
         paymentBtn.disabled = true;
         paymentBtn.textContent = 'Processing...';
@@ -256,7 +253,7 @@
             const response = await fetch('https://shubhmed.onrender.com/create-payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: userData.name, email: userData.email, phone: userData.phone })
+                body: JSON.stringify({}) // Khali body bhej sakte hain kyonki server ko plan id pata hai
             });
             if (!response.ok) { const err = await response.json(); throw new Error(err.error); }
             const data = await response.json();
@@ -297,7 +294,6 @@
         }
     });
 
-    // --- Logout Button Logic ---
     logoutBtn.addEventListener('click', async () => {
         if (confirm("Are you sure you want to log out? This will allow you to create a new profile.")) {
             await auth.signOut();
@@ -326,18 +322,23 @@
         startBtn.disabled = false;
     }
     
-    async function verifyPaymentOnServer(response) {
+    // ########## START: YAHI FINAL AUR SABSE ZAROORI BADLAV HAI ##########
+    // SAMASYA: Hum server ko order_id nahi bhej rahe the.
+    // SAMADHAN: Ab hum server ko verification ke liye poora 'paymentResponse' object bhejenge.
+    async function verifyPaymentOnServer(paymentResponse) {
         const res = await fetch('https://shubhmed.onrender.com/verify-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_subscription_id: response.razorpay_subscription_id,
-                razorpay_signature: response.razorpay_signature
+                razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                razorpay_subscription_id: paymentResponse.razorpay_subscription_id,
+                razorpay_signature: paymentResponse.razorpay_signature,
+                razorpay_order_id: paymentResponse.razorpay_order_id // <<== YAHI ZAROORI HISSA THA
             })
         });
         return await res.json();
     }
+    // ########################### END BADLAV ############################
     </script>
 </body>
 </html>
