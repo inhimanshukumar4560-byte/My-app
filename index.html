@@ -3,150 +3,370 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shubhzone - Final Version</title>
+    <title>Shubhzone - Secure Profile Creation</title>
+    
+    <!-- Firebase SDK Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <!-- Razorpay SDK Script -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
-        :root { --brand-cyan: #00d9ff; --brand-blue: #3c79ff; --bg-dark: #05070a; --bg-card: #10141b; --text-primary: #f0f6fc; --text-secondary: #a1a9b2; --border-color: rgba(255, 255, 255, 0.1); }
-        body { font-family: 'Inter', sans-serif; background-color: #000; color: var(--text-secondary); text-align: center; padding-top: 50px; }
-        .logo { font-size: 2.5rem; font-weight: 900; color: var(--text-primary); text-decoration: none; margin-bottom: 40px; display: inline-block; }
+        /* CSS में सिर्फ ज़रूरी बदलाव किए गए हैं */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        :root { 
+            --brand-cyan: #00d9ff; 
+            --bg-dark: #05070a; 
+            --bg-card: #10141b; 
+            --text-primary: #f0f6fc; 
+            --text-secondary: #a1a9b2; 
+            --border-color: rgba(255, 255, 255, 0.1); 
+            --success-color: #4CAF50;
+            --danger-color: #ff4d4d;
+        }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-dark); 
+            color: var(--text-secondary); 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            width: 100%;
+            max-width: 450px;
+        }
+        .logo { 
+            font-size: 2.5rem; 
+            font-weight: 700; 
+            color: var(--text-primary); 
+            text-decoration: none; 
+            margin-bottom: 30px; 
+        }
         .logo span { color: var(--brand-cyan); }
-        .header-buttons { display: flex; flex-direction: column; gap: 20px; align-items: center; }
-        .main-btn { background: transparent; color: var(--brand-cyan); border: 1px solid var(--brand-cyan); padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s ease; cursor: pointer; font-size: 1.1rem; min-width: 220px; }
-        .main-btn:hover { background: var(--brand-cyan); color: #000; }
-        .main-btn:disabled { border-color: #555; color: #555; cursor: not-allowed; background: transparent; }
-        .payment-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 2000; padding: 20px; }
-        .payment-modal-content { background: var(--bg-card); padding: 40px; border-radius: 15px; border: 1px solid var(--border-color); max-width: 450px; width: 100%; }
-        .payment-modal-content h3 { text-align: center; margin-bottom: 25px; color: var(--text-primary); }
-        .form-group { display: flex; flex-direction: column; margin-bottom: 20px; }
-        .form-group label { margin-bottom: 8px; color: var(--text-primary); text-align: left; font-size: 0.9rem; }
-        .form-group input { background-color: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; color: var(--text-primary); font-size: 1rem; }
-        .modal-buttons { margin-top: 30px; display: flex; flex-direction: column; gap: 15px; }
-        .modal-buttons .main-btn { width: 100%; }
+        
+        .form-container {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 30px;
+            display: none; /* JavaScript ise dikhayega */
+        }
+        .form-container.active {
+            display: block;
+        }
+
+        h3 {
+            color: var(--text-primary);
+            margin-top: 0;
+            margin-bottom: 25px;
+        }
+        .form-group { 
+            margin-bottom: 20px; 
+            text-align: left;
+        }
+        .form-group label { 
+            display: block;
+            margin-bottom: 8px; 
+            font-size: 0.9rem;
+        }
+        .form-group input { 
+            width: 100%;
+            background-color: var(--bg-dark); 
+            border: 1px solid var(--border-color); 
+            border-radius: 8px; 
+            padding: 12px; 
+            color: var(--text-primary); 
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        .main-btn {
+            background: var(--brand-cyan);
+            color: #000;
+            border: 1px solid var(--brand-cyan);
+            padding: 14px 30px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            width: 100%;
+            margin-top: 10px;
+            transition: transform 0.2s;
+        }
+        .main-btn:hover {
+            transform: scale(1.02);
+        }
+        .main-btn:disabled {
+            background: #555;
+            color: #aaa;
+            border-color: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        #logout-btn {
+            background: transparent;
+            color: var(--danger-color);
+            border-color: var(--danger-color);
+        }
+
+        .status-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .status-message.success {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: var(--success-color);
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <div class="logo">Shubh<span>zone</span></div>
-    <div class="header-buttons">
-        <button id="start-btn" class="main-btn" disabled>Start</button>
-        <button id="payment-btn" class="main-btn">Payment</button>
-        <button id="other-apps-btn" class="main-btn">Other Apps</button>
-    </div>
-    <div id="payment-info-modal" class="payment-modal-overlay">
-        <div class="payment-modal-content">
-            <h3>Enter Your Details</h3>
-            <form id="payment-info-form">
-                <div class="form-group"><label for="user-name">Full Name</label><input type="text" id="user-name" required placeholder="Your full name"></div>
-                <div class="form-group"><label for="user-email">Email Address</label><input type="email" id="user-email" required placeholder="your@email.com"></div>
-                <div class="form-group"><label for="user-phone">Phone Number</label><input type="tel" id="user-phone" required placeholder="10-digit number"></div>
-                <div class="modal-buttons">
-                    <button type="submit" class="main-btn">Proceed to Pay</button>
-                    <button type="button" id="cancel-payment-btn" class="main-btn">Cancel</button>
+
+    <div class="container">
+        <div class="logo">Shubh<span>zone</span></div>
+
+        <!-- YEH CONTAINER PROFILE BANANE KE LIYE HAI -->
+        <div id="profile-container" class="form-container">
+            <h3>Create Your Profile</h3>
+            <form id="profile-form">
+                <div class="form-group">
+                    <label for="user-name">Full Name</label>
+                    <input type="text" id="user-name" required>
                 </div>
+                <div class="form-group">
+                    <label for="user-email">Email Address</label>
+                    <input type="email" id="user-email" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-phone">Phone Number</label>
+                    <input type="tel" id="user-phone" required>
+                </div>
+                <button type="submit" id="save-profile-btn" class="main-btn">Save Profile</button>
             </form>
+        </div>
+
+        <!-- YEH CONTAINER PAYMENT AUR START KE LIYE HAI -->
+        <div id="payment-container" class="form-container">
+            <h3>Profile Saved!</h3>
+            <p>Your profile has been saved. Please proceed to payment to activate your account.</p>
+            <div id="user-info" class="status-message success">
+                <!-- User info will be shown here -->
+            </div>
+            <button id="payment-btn" class="main-btn">Proceed to Payment (₹3)</button>
+            <button id="start-btn" class="main-btn" disabled>Start Using App</button>
+            <button id="logout-btn" class="main-btn">Logout & Create New Profile</button>
         </div>
     </div>
 
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script>
-    const firebaseConfig = { apiKey: "AIzaSyDuvWTMJL5edNG6cheez5pmwI2KlLCwtjw", authDomain: "shubhzone-4a6b0.firebaseapp.com", projectId: "shubhzone-4a6b0", storageBucket: "shubhzone-4a6b0.firebasestorage.app", messagingSenderId: "439309269785", appId: "1:439309269785:web:08a1256812648daafea388" };
+    // =================================================================
+    // SECTION 1: INITIALIZATION
+    // =================================================================
+    const firebaseConfig = { 
+        apiKey: "AIzaSyDuvWTMJL5edNG6cheez5pmwI2KlLCwtjw", 
+        authDomain: "shubhzone-4a6b0.firebaseapp.com", 
+        projectId: "shubhzone-4a6b0", 
+        storageBucket: "shubhzone-4a6b0.firebasestorage.app", 
+        messagingSenderId: "439309269785", 
+        appId: "1:439309269785:web:08a1256812648daafea388" 
+    };
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
-    auth.signInAnonymously().catch(e => console.error("Auth failed:", e));
 
-    const startBtn = document.getElementById('start-btn');
+    // Element Selectors
+    const profileContainer = document.getElementById('profile-container');
+    const paymentContainer = document.getElementById('payment-container');
+    const profileForm = document.getElementById('profile-form');
+    const saveProfileBtn = document.getElementById('save-profile-btn');
     const paymentBtn = document.getElementById('payment-btn');
-    const paymentInfoModal = document.getElementById('payment-info-modal');
-    const paymentInfoForm = document.getElementById('payment-info-form');
-    const cancelPaymentBtn = document.getElementById('cancel-payment-btn');
+    const startBtn = document.getElementById('start-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userInfoDiv = document.getElementById('user-info');
+    
+    // =================================================================
+    // SECTION 2: CORE LOGIC
+    // =================================================================
+    
+    // Jab page load ho, to check karo ki user kaun hai
+    auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            // User is signed in (even anonymously)
+            console.log("User is signed in with UID:", user.uid);
+            const userDocRef = db.collection('users').doc(user.uid);
+            const userDoc = await userDocRef.get();
 
-    async function initiatePayment(userName, userEmail, userPhone) {
+            if (userDoc.exists) {
+                // Is user ki profile pehle se Firebase me hai
+                console.log("Existing user profile found in Firebase.");
+                const userData = userDoc.data();
+                displayPaymentScreen(userData); // Seedhe payment screen dikhao
+
+                // Check karo ki payment ho chuka hai ya nahi
+                if (userData.paymentStatus === 'success') {
+                    console.log("User has already paid.");
+                    paymentBtn.disabled = true;
+                    paymentBtn.textContent = 'Payment Successful ✓';
+                    startBtn.disabled = false;
+                }
+            } else {
+                // Yeh naya user hai, use profile banane wala form dikhao
+                console.log("New user. Displaying profile creation form.");
+                displayProfileScreen();
+            }
+        } else {
+            // User is signed out, sign them in anonymously
+            console.log("No user found, signing in anonymously...");
+            auth.signInAnonymously().catch(e => console.error("Anonymous sign-in failed:", e));
+        }
+    });
+
+    // --- Profile Form Submit Logic ---
+    profileForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        saveProfileBtn.disabled = true;
+        saveProfileBtn.textContent = 'Saving...';
+
+        const user = auth.currentUser;
+        if (!user) {
+            alert("Error: Not signed in. Please refresh the page.");
+            saveProfileBtn.disabled = false;
+            saveProfileBtn.textContent = 'Save Profile';
+            return;
+        }
+
+        const userData = {
+            name: document.getElementById('user-name').value,
+            email: document.getElementById('user-email').value,
+            phone: document.getElementById('user-phone').value,
+            createdAt: new Date()
+        };
+
+        try {
+            // Data ko Firebase me save karo (PAYMENT SE PEHLE)
+            await db.collection('users').doc(user.uid).set(userData);
+            console.log("Profile saved to Firebase successfully!");
+            displayPaymentScreen(userData);
+        } catch (error) {
+            console.error("Error saving profile to Firebase:", error);
+            alert("Error saving profile: " + error.message);
+            saveProfileBtn.disabled = false;
+            saveProfileBtn.textContent = 'Save Profile';
+        }
+    });
+
+    // --- Payment Button Click Logic ---
+    paymentBtn.addEventListener('click', async () => {
+        paymentBtn.disabled = true;
+        paymentBtn.textContent = 'Processing...';
+        
+        const user = auth.currentUser;
+        const userDoc = await db.collection('users').doc(user.uid).get();
+        const userData = userDoc.data();
+
         try {
             const response = await fetch('https://shubhmed.onrender.com/create-payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: userName, email: userEmail, phone: userPhone })
+                body: JSON.stringify({ name: userData.name, email: userData.email, phone: userData.phone })
             });
+
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.error);
             }
             const data = await response.json();
+
             const options = {
                 key: data.key_id,
                 order_id: data.order_id,
                 name: "Shubhzone Services",
-                description: "Subscription Authentication",
-                prefill: { name: userName, email: userEmail, contact: userPhone },
-                handler: async function (paymentResponse) {
-                    const verificationResponse = await fetch('https://shubhmed.onrender.com/verify-payment', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            razorpay_payment_id: paymentResponse.razorpay_payment_id,
-                            razorpay_order_id: paymentResponse.razorpay_order_id,
-                            razorpay_signature: paymentResponse.razorpay_signature
-                        })
-                    });
-                    const result = await verificationResponse.json();
-                    if (result.status === 'success') {
-                        alert(result.message);
-                        paymentBtn.disabled = true;
-                        paymentBtn.textContent = 'Paid ✓';
+                handler: async (paymentResponse) => {
+                    // Payment successful hone par, server se verify karo
+                    const verificationResult = await verifyPaymentOnServer(paymentResponse);
+                    
+                    if (verificationResult.status === 'success') {
+                        // Ab Firebase me profile ko UPDATE karo
+                        await db.collection('users').doc(user.uid).update({
+                            paymentStatus: 'success',
+                            subscriptionId: verificationResult.subscriptionId,
+                            razorpayCustomerId: data.razorpayCustomerId,
+                            paymentTimestamp: new Date()
+                        });
+                        
+                        alert("Payment successful! Your account is now active.");
+                        paymentBtn.textContent = 'Payment Successful ✓';
                         startBtn.disabled = false;
-                        localStorage.setItem('shubhzone_payment_status', 'success');
-                        localStorage.setItem('shubhzone_userName', userName);
-                        localStorage.setItem('shubhzone_userEmail', userEmail);
-                        localStorage.setItem('shubhzone_userPhone', userPhone);
-                        const currentUser = auth.currentUser;
-                        if (currentUser) {
-                            db.collection('users').doc(currentUser.uid).set({
-                                name: userName, email: userEmail, phone: userPhone,
-                                paymentStatus: 'success', subscriptionId: result.subscriptionId,
-                                paymentTimestamp: new Date()
-                            }, { merge: true });
-                        }
-                    } else { throw new Error("Payment verification failed."); }
+                    } else {
+                        throw new Error("Payment verification failed.");
+                    }
                 }
             };
             new Razorpay(options).open();
+            // Agar user payment cancel kar de to button ko wapas enable karo
+            options.modal = {
+                ondismiss: function() {
+                    paymentBtn.disabled = false;
+                    paymentBtn.textContent = 'Proceed to Payment (₹3)';
+                }
+            };
         } catch (error) {
             alert("Error: " + error.message);
+            paymentBtn.disabled = false;
+            paymentBtn.textContent = 'Proceed to Payment (₹3)';
         }
+    });
+
+    // --- Logout Button Logic ---
+    logoutBtn.addEventListener('click', async () => {
+        if (confirm("Are you sure you want to log out? This will allow you to create a new profile.")) {
+            await auth.signOut();
+            // Sign out ke baad page reload karo taaki naya anonymous user ban sake
+            window.location.reload();
+        }
+    });
+
+    // =================================================================
+    // SECTION 3: HELPER FUNCTIONS
+    // =================================================================
+    
+    function displayProfileScreen() {
+        profileContainer.classList.add('active');
+        paymentContainer.classList.remove('active');
     }
 
-    paymentBtn.onclick = () => {
-        const savedName = localStorage.getItem('shubhzone_userName');
-        const savedEmail = localStorage.getItem('shubhzone_userEmail');
-        const savedPhone = localStorage.getItem('shubhzone_userPhone');
-        if (savedName && savedEmail && savedPhone) {
-            initiatePayment(savedName, savedEmail, savedPhone);
-        } else {
-            paymentInfoModal.style.display = 'flex';
-        }
-    };
+    function displayPaymentScreen(userData) {
+        profileContainer.classList.remove('active');
+        paymentContainer.classList.add('active');
+        userInfoDiv.innerHTML = `
+            <strong>Name:</strong> ${userData.name}<br>
+            <strong>Email:</strong> ${userData.email}
+        `;
+    }
 
-    paymentInfoForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        paymentInfoModal.style.display = 'none';
-        const userName = document.getElementById('user-name').value;
-        const userEmail = document.getElementById('user-email').value;
-        const userPhone = document.getElementById('user-phone').value;
-        initiatePayment(userName, userEmail, userPhone);
-    });
-
-    cancelPaymentBtn.onclick = () => paymentInfoModal.style.display = 'none';
-    
-    document.addEventListener('DOMContentLoaded', () => {
-        if (localStorage.getItem('shubhzone_payment_status') === 'success') {
-            paymentBtn.disabled = true;
-            paymentBtn.textContent = 'Paid ✓';
-            startBtn.disabled = false;
-        }
-    });
+    async function verifyPaymentOnServer(response) {
+        const verificationResponse = await fetch('https://shubhmed.onrender.com/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+            })
+        });
+        return await verificationResponse.json();
+    }
     </script>
 </body>
 </html>
