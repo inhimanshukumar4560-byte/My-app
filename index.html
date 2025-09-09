@@ -3,38 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shubhzone - The Nexus of Skill and Opportunity</title>
+    <title>Shubhzone - Final Version</title>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <style>
-        /* CSS is unchanged */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
-        :root { --brand-cyan: #00d9ff; --brand-blue: #3c79ff; --bg-dark: #05070a; --bg-card: #10141b; --text-primary: #f0f6fc; --text-secondary: #a1a9b2; --border-color: rgba(255, 255, 255, 0.1); --danger-color: #ff4d4d; }
-        * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Inter', sans-serif; background-color: var(--bg-dark); color: var(--text-secondary); } body.modal-open { overflow: hidden; } .container { width: 90%; max-width: 1100px; margin: auto; } .header { padding: 1.5rem 0; position: fixed; top: 0; width: 100%; z-index: 1000; background: rgba(5, 7, 10, 0.7); backdrop-filter: blur(10px); } .header .container { display: flex; justify-content: space-between; align-items: center; } .logo { font-size: 1.7rem; font-weight: 900; color: var(--text-primary); text-decoration: none; } .logo span { color: var(--brand-cyan); } .header-buttons { display: flex; gap: 15px; } .main-btn { background: var(--brand-cyan); color: #000; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s ease; display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer; } .secondary-btn { background: transparent; color: var(--brand-cyan); border: 1px solid var(--brand-cyan); } .main-btn:hover { background: #fff; color: #000; transform: scale(1.05); } .secondary-btn:hover { background: var(--brand-cyan); color: #000; } .main-btn:disabled { background: #555; color: #aaa; cursor: not-allowed; } .payment-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 2000; padding: 20px; } .payment-modal-content { background: var(--bg-card); padding: 40px; border-radius: 15px; border: 1px solid var(--border-color); max-width: 450px; width: 100%; } .payment-modal-content h3 { text-align: center; margin-bottom: 25px; color: var(--text-primary); } .form-group { display: flex; flex-direction: column; margin-bottom: 20px; } .form-group label { margin-bottom: 8px; color: var(--text-primary); font-size: 0.9rem; } .form-group input { background-color: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; color: var(--text-primary); font-size: 1rem; } .modal-buttons { margin-top: 30px; display: flex; gap: 15px; } .modal-buttons .main-btn { width: 100%; justify-content: center; }
+        :root { --brand-cyan: #00d9ff; --brand-blue: #3c79ff; --bg-dark: #05070a; --bg-card: #10141b; --text-primary: #f0f6fc; --text-secondary: #a1a9b2; --border-color: rgba(255, 255, 255, 0.1); }
+        body { font-family: 'Inter', sans-serif; background-color: #000; color: var(--text-secondary); text-align: center; padding-top: 50px; }
+        .logo { font-size: 2.5rem; font-weight: 900; color: var(--text-primary); text-decoration: none; margin-bottom: 40px; display: inline-block; }
+        .logo span { color: var(--brand-cyan); }
+        .header-buttons { display: flex; flex-direction: column; gap: 20px; align-items: center; }
+        .main-btn { background: transparent; color: var(--brand-cyan); border: 1px solid var(--brand-cyan); padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: all 0.3s ease; cursor: pointer; font-size: 1.1rem; min-width: 220px; }
+        .main-btn:hover { background: var(--brand-cyan); color: #000; }
+        .main-btn:disabled { border-color: #555; color: #555; cursor: not-allowed; background: transparent; }
+        .payment-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 2000; padding: 20px; }
+        .payment-modal-content { background: var(--bg-card); padding: 40px; border-radius: 15px; border: 1px solid var(--border-color); max-width: 450px; width: 100%; }
+        .payment-modal-content h3 { text-align: center; margin-bottom: 25px; color: var(--text-primary); }
+        .form-group { display: flex; flex-direction: column; margin-bottom: 20px; }
+        .form-group label { margin-bottom: 8px; color: var(--text-primary); text-align: left; font-size: 0.9rem; }
+        .form-group input { background-color: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; color: var(--text-primary); font-size: 1rem; }
+        .modal-buttons { margin-top: 30px; display: flex; flex-direction: column; gap: 15px; }
+        .modal-buttons .main-btn { width: 100%; }
     </style>
 </head>
 <body>
-    <header class="header">
-        <div class="container">
-            <a href="#" class="logo">Shubh<span>zone</span></a>
-            <div class="header-buttons">
-                <button id="start-btn" class="main-btn" disabled>Start</button>
-                <button id="payment-btn" class="main-btn secondary-btn">Payment</button>
-                <button id="other-apps-btn" class="main-btn secondary-btn">Other Apps</button>
-            </div>
-        </div>
-    </header>
+    <div class="logo">Shubh<span>zone</span></div>
+    <div class="header-buttons">
+        <button id="start-btn" class="main-btn" disabled>Start</button>
+        <button id="payment-btn" class="main-btn">Payment</button>
+        <button id="other-apps-btn" class="main-btn">Other Apps</button>
+    </div>
     <div id="payment-info-modal" class="payment-modal-overlay">
         <div class="payment-modal-content">
             <h3>Enter Your Details</h3>
             <form id="payment-info-form">
-                <div class="form-group"><label for="user-name">Full Name</label><input type="text" id="user-name" required></div>
-                <div class="form-group"><label for="user-email">Email Address</label><input type="email" id="user-email" required></div>
-                <div class="form-group"><label for="user-phone">Phone Number</label><input type="tel" id="user-phone" required></div>
+                <div class="form-group"><label for="user-name">Full Name</label><input type="text" id="user-name" required placeholder="Your full name"></div>
+                <div class="form-group"><label for="user-email">Email Address</label><input type="email" id="user-email" required placeholder="your@email.com"></div>
+                <div class="form-group"><label for="user-phone">Phone Number</label><input type="tel" id="user-phone" required placeholder="10-digit number"></div>
                 <div class="modal-buttons">
                     <button type="submit" class="main-btn">Proceed to Pay</button>
-                    <button type="button" id="cancel-payment-btn" class="main-btn secondary-btn">Cancel</button>
+                    <button type="button" id="cancel-payment-btn" class="main-btn">Cancel</button>
                 </div>
             </form>
         </div>
@@ -42,39 +51,28 @@
 
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script>
-    // --- Step 1: Firebase Configuration ---
-    const firebaseConfig = { apiKey: "AIzaSyDuvWTMJL5edNG6cheez5pmwI2KlLCwtjw", authDomain: "shubhzone-4a6b0.firebaseapp.com", databaseURL: "https://shubhzone-4a6b0-default-rtdb.firebaseio.com", projectId: "shubhzone-4a6b0", storageBucket: "shubhzone-4a6b0.firebasestorage.app", messagingSenderId: "439309269785", appId: "1:439309269785:web:08a1256812648daafea388", measurementId: "G-5S0VFF21SB" };
+    const firebaseConfig = { apiKey: "AIzaSyDuvWTMJL5edNG6cheez5pmwI2KlLCwtjw", authDomain: "shubhzone-4a6b0.firebaseapp.com", projectId: "shubhzone-4a6b0", storageBucket: "shubhzone-4a6b0.firebasestorage.app", messagingSenderId: "439309269785", appId: "1:439309269785:web:08a1256812648daafea388" };
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
-    auth.signInAnonymously().catch(error => console.error("Anonymous sign-in failed:", error));
+    auth.signInAnonymously().catch(e => console.error("Auth failed:", e));
 
-    // --- Step 2: Element Selectors ---
     const startBtn = document.getElementById('start-btn');
     const paymentBtn = document.getElementById('payment-btn');
     const paymentInfoModal = document.getElementById('payment-info-modal');
     const paymentInfoForm = document.getElementById('payment-info-form');
     const cancelPaymentBtn = document.getElementById('cancel-payment-btn');
 
-    // --- Step 3: Core Payment Logic Function ---
     async function initiatePayment(userName, userEmail, userPhone) {
         try {
-            // ########## START: ZAROORI BADLAV ##########
-            // Ab hum server ko user ki details bhej rahe hain
             const response = await fetch('https://shubhmed.onrender.com/create-payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: userName,
-                    email: userEmail,
-                    phone: userPhone
-                })
+                body: JSON.stringify({ name: userName, email: userEmail, phone: userPhone })
             });
-            // ###################### END ######################
-
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Could not start payment process.");
+                const err = await response.json();
+                throw new Error(err.error);
             }
             const data = await response.json();
             const options = {
@@ -114,16 +112,13 @@
                     } else { throw new Error("Payment verification failed."); }
                 }
             };
-            const rzp = new Razorpay(options);
-            rzp.open();
+            new Razorpay(options).open();
         } catch (error) {
-            console.error("Payment initiation error:", error);
             alert("Error: " + error.message);
         }
     }
 
-    // --- Step 4: Event Listeners (No changes here) ---
-    paymentBtn.onclick = function() {
+    paymentBtn.onclick = () => {
         const savedName = localStorage.getItem('shubhzone_userName');
         const savedEmail = localStorage.getItem('shubhzone_userEmail');
         const savedPhone = localStorage.getItem('shubhzone_userPhone');
@@ -131,22 +126,20 @@
             initiatePayment(savedName, savedEmail, savedPhone);
         } else {
             paymentInfoModal.style.display = 'flex';
-            document.body.classList.add('modal-open');
         }
     };
-    paymentInfoForm.addEventListener('submit', function(e) {
+
+    paymentInfoForm.addEventListener('submit', (e) => {
         e.preventDefault();
         paymentInfoModal.style.display = 'none';
-        document.body.classList.remove('modal-open');
         const userName = document.getElementById('user-name').value;
         const userEmail = document.getElementById('user-email').value;
         const userPhone = document.getElementById('user-phone').value;
         initiatePayment(userName, userEmail, userPhone);
     });
-    cancelPaymentBtn.onclick = function() {
-        paymentInfoModal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-    };
+
+    cancelPaymentBtn.onclick = () => paymentInfoModal.style.display = 'none';
+    
     document.addEventListener('DOMContentLoaded', () => {
         if (localStorage.getItem('shubhzone_payment_status') === 'success') {
             paymentBtn.disabled = true;
@@ -154,7 +147,6 @@
             startBtn.disabled = false;
         }
     });
-    startBtn.onclick = () => window.location.href = 'https://youtube-7lwy.onrender.com';
     </script>
 </body>
 </html>
