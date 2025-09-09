@@ -4,8 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shubhzone - The Nexus of Skill and Opportunity</title>
+    
+    <!-- ########## START: ZAROORI BADLAV #1 - FIREBASE SDK SCRIPTS ########## -->
+    <!-- In scripts ko add karna zaroori hai taki Firebase kaam kar sake -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <!-- ########################### END BADLAV ############################ -->
+
     <style>
-        /* Aapka CSS code yahan hai (koi badlav nahi) */
+        /* Aapka poora CSS code yahan hai (isme koi badlav nahi) */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
         :root { --brand-cyan: #00d9ff; --brand-blue: #3c79ff; --bg-dark: #05070a; --bg-card: #10141b; --text-primary: #f0f6fc; --text-secondary: #a1a9b2; --border-color: rgba(255, 255, 255, 0.1); --danger-color: #ff4d4d; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -31,7 +39,35 @@
         .secondary-btn:hover { background: var(--brand-cyan); color: #000; }
         .main-btn svg { transition: transform 0.3s ease; }
         .main-btn:hover svg { transform: translateX(4px); }
-        /* ... aapka baaki ka CSS code ... */
+        
+        /* Start button ke disabled state ke liye CSS */
+        .main-btn:disabled {
+            background: #555;
+            color: #aaa;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Payment se pehle jankari lene wale Modal ke liye CSS */
+        .payment-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            display: none; justify-content: center; align-items: center; z-index: 2000; padding: 20px;
+        }
+        .payment-modal-content {
+            background: var(--bg-card); padding: 40px; border-radius: 15px; border: 1px solid var(--border-color);
+            max-width: 450px; width: 100%; text-align: left; position: relative;
+        }
+        .payment-modal-content h3 { text-align: center; margin-bottom: 25px; }
+        .form-group { display: flex; flex-direction: column; margin-bottom: 20px; }
+        .form-group label { margin-bottom: 8px; color: var(--text-primary); font-size: 0.9rem; }
+        .form-group input {
+            background-color: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 12px; color: var(--text-primary); font-family: 'Inter', sans-serif; font-size: 1rem;
+        }
+        .modal-buttons { margin-top: 30px; display: flex; gap: 15px; }
+        .modal-buttons .main-btn { width: 100%; justify-content: center; }
+
     </style>
 </head>
 <body>
@@ -40,73 +76,164 @@
         <div class="container">
             <a href="#" class="logo" id="home-logo">Shubh<span>zone</span></a>
             <div class="header-buttons">
-                <a href="./app.html" class="main-btn">
+                <!-- ########## START: ZAROORI BADLAV #2 - BUTTON LOGIC ########## -->
+                <!-- "Start" button ko ab ek ID di gayi hai aur ise shuru me disabled rakha gaya hai -->
+                <button id="start-btn" class="main-btn" disabled>
                     <span>Start</span>
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/></svg>
-                </a>
-                
-                <!-- ########## START: YAHAN PAR BADLAV KIYA GAYA HAI ########## -->
-                <!-- Maine "Other Apps" button ke bagal me ek naya "Activate" button joda hai -->
-                <button id="start-subscription-btn" class="main-btn secondary-btn">
-                   <span>Activate</span>
                 </button>
-                <!-- ####################### END BADLAV ######################## -->
-
+                
+                <!-- "Activate" button ka naam badalkar "Payment" kar diya gaya hai -->
+                <button id="payment-btn" class="main-btn secondary-btn">
+                   <span>Payment</span>
+                </button>
+                
                 <button id="other-apps-btn" class="main-btn secondary-btn">
                    <span>Other Apps</span>
                 </button>
+                <!-- ######################## END BADLAV ######################## -->
             </div>
         </div>
     </header>
 
-    <!-- ... aapka baaki ka HTML content (main, footer, modals) yahan hai ... -->
+    <!-- ... aapka baaki ka HTML content (main, footer, etc.) yahan hai ... -->
     <!-- ... isme koi badlav nahi kiya gaya hai ... -->
 
 
-    <!-- ########## START: YAHAN PAR NYA SCRIPT JODA GAYA HAI ########## -->
+    <!-- ########## START: ZAROORI BADLAV #3 - PAYMENT SE PEHLE JANKARI LENE WALA MODAL ########## -->
+    <div id="payment-info-modal" class="payment-modal-overlay">
+        <div class="payment-modal-content">
+            <h3>Enter Your Details</h3>
+            <form id="payment-info-form">
+                <div class="form-group">
+                    <label for="user-name">Full Name</label>
+                    <input type="text" id="user-name" placeholder="e.g., Himanshu Kumar" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-email">Email Address</label>
+                    <input type="email" id="user-email" placeholder="e.g., yourname@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-phone">Phone Number</label>
+                    <input type="tel" id="user-phone" placeholder="e.g., 9999988888" required>
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" id="proceed-to-payment-btn" class="main-btn">Proceed to Pay</button>
+                    <button type="button" id="cancel-payment-btn" class="main-btn secondary-btn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- ################################# END MODAL ################################## -->
+
+    <!-- Aapka purana Warning Modal yahan hai (isme koi badlav nahi) -->
+
+
+    <!-- ########## START: ZAROORI BADLAV #4 - FIREBASE AUR PAYMENT KA POORA JAVASCRIPT LOGIC ########## -->
     <!-- Step 1: Razorpay ki script, yeh payment ke liye zaroori hai -->
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-    
-    <!-- Step 2: Hamara payment ka logic -->
+
     <script>
-    // Jab naya "Activate" button click hoga, to yeh function chalega
-    document.getElementById('start-subscription-btn').onclick = async function(e) {
-        e.preventDefault(); // Page ko reload hone se rokein
-        console.log("Activate button clicked. Calling Render server to create subscription...");
+    // Step 2: Firebase ko initialize karein
+    const firebaseConfig = {
+      apiKey: "AIzaSyDuvWTMJL5edNG6cheez5pmwI2KlLCwtjw",
+      authDomain: "shubhzone-4a6b0.firebaseapp.com",
+      databaseURL: "https://shubhzone-4a6b0-default-rtdb.firebaseio.com",
+      projectId: "shubhzone-4a6b0",
+      storageBucket: "shubhzone-4a6b0.firebasestorage.app",
+      messagingSenderId: "439309269785",
+      appId: "1:439309269785:web:08a1256812648daafea388",
+      measurementId: "G-5S0VFF21SB"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    
+    // Anonymously sign-in to get a user ID for tracking
+    auth.signInAnonymously().catch(error => {
+        console.error("Anonymous sign-in failed:", error);
+    });
+
+    // Step 3: Saare buttons aur elements ko select karein
+    const startBtn = document.getElementById('start-btn');
+    const paymentBtn = document.getElementById('payment-btn');
+    const paymentInfoModal = document.getElementById('payment-info-modal');
+    const paymentInfoForm = document.getElementById('payment-info-form');
+    const cancelPaymentBtn = document.getElementById('cancel-payment-btn');
+
+    // Function to handle the start button click
+    startBtn.onclick = function() {
+        // Yahan aap apna redirect link daalein
+        window.location.href = 'https://youtube-7lwy.onrender.com';
+    };
+
+    // Function to open the pre-payment info modal
+    paymentBtn.onclick = function() {
+        paymentInfoModal.style.display = 'flex';
+        document.body.classList.add('modal-open');
+    };
+    
+    // Function to close the modal
+    cancelPaymentBtn.onclick = function() {
+        paymentInfoModal.style.display = 'none';
+        document.body.classList.remove('modal-open');
+    };
+
+    // Function to check if user has already paid
+    // Page load hone par check karein
+    document.addEventListener('DOMContentLoaded', () => {
+        if (localStorage.getItem('shubhzone_payment_status') === 'success') {
+            paymentBtn.disabled = true;
+            paymentBtn.textContent = 'Paid ✓';
+            startBtn.disabled = false;
+        }
+    });
+
+    // Jab user form submit karega
+    paymentInfoForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        paymentInfoModal.style.display = 'none'; // Modal ko band kar dein
+        document.body.classList.remove('modal-open');
+
+        // User dwara bhari gayi jankari ko lein
+        const userName = document.getElementById('user-name').value;
+        const userEmail = document.getElementById('user-email').value;
+        const userPhone = document.getElementById('user-phone').value;
 
         try {
             // Hum yahan se सीधे aapke Render server ko call kar rahe hain.
-            // API Key yahan bilkul nahi hai, isliye yeh 100% surakshit hai.
             const response = await fetch('https://shubhmed.onrender.com/create-payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     isSubscription: true
-                    // Agar aapka login system hai, to user ka token yahan bhej sakte hain
-                    // token: "FIREBASE_USER_TOKEN_HERE" 
                 })
             });
 
-            // Agar server se koi error aaya, to user ko batayein
             if (!response.ok) {
                 const errorData = await response.json();
                 alert("Error: " + (errorData.error || "Could not start payment process."));
                 return;
             }
 
-            // Server se mili jankari (key aur subscription_id) ko store karein
             const data = await response.json();
 
             // Razorpay ka payment pop-up taiyar karein
             const options = {
-                "key": data.key_id, // Yeh public key hai jo server se aayi hai
-                "subscription_id": data.subscription_id, // Yeh subscription ID bhi server se aayi hai
+                "key": data.key_id,
+                "subscription_id": data.subscription_id,
                 "name": "Shubhzone Services",
-                "description": "₹1 Subscription Authentication",
+                "description": "Subscription Authentication",
+                "prefill": { // YAHAN PAR HUM RAZORPAY FORM KO PEHLE SE BHAR RAHE HAIN
+                    "name": userName,
+                    "email": userEmail,
+                    "contact": userPhone
+                },
                 "handler": async function (paymentResponse) {
                     console.log("Payment successful. Verifying with server...");
                     
-                    // Jab payment ho jaye, to hum server ko wapas call karke confirm karenge
                     const verificationResponse = await fetch('https://shubhmed.onrender.com/verify-payment', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -114,18 +241,40 @@
                             razorpay_payment_id: paymentResponse.razorpay_payment_id,
                             razorpay_subscription_id: paymentResponse.razorpay_subscription_id,
                             razorpay_signature: paymentResponse.razorpay_signature
-                            // token: "FIREBASE_USER_TOKEN_HERE"
                         })
                     });
                     
                     const result = await verificationResponse.json();
                     
-                    // User ko final message dikhayein
-                    alert(result.message);
+                    if (result.status === 'success') {
+                        // Payment safal hone par
+                        alert(result.message);
+                        paymentBtn.disabled = true;
+                        paymentBtn.textContent = 'Paid ✓';
+                        startBtn.disabled = false;
+                        
+                        // User ki state ko save karein taki refresh karne par bhi yaad rahe
+                        localStorage.setItem('shubhzone_payment_status', 'success');
+
+                        // Aap chahein to user ki jankari Firebase me save kar sakte hain
+                        const currentUser = auth.currentUser;
+                        if (currentUser) {
+                            db.collection('users').doc(currentUser.uid).set({
+                                name: userName,
+                                email: userEmail,
+                                phone: userPhone,
+                                paymentStatus: 'success',
+                                subscriptionId: paymentResponse.razorpay_subscription_id,
+                                paymentTimestamp: new Date()
+                            });
+                        }
+
+                    } else {
+                        alert("Payment verification failed. Please contact support.");
+                    }
                 }
             };
             
-            // Razorpay ka pop-up khol dein
             const rzp = new Razorpay(options);
             rzp.open();
 
@@ -133,15 +282,14 @@
             console.error("A network error occurred:", error);
             alert("Could not connect to the payment server. Please check your internet connection and try again.");
         }
-    }
+    });
     </script>
-    <!-- ####################### END NYA SCRIPT ######################## -->
-
+    <!-- #################################################################################### -->
 
     <!-- Aapka purana JavaScript code (DOMContentLoaded) yahan se shuru hota hai -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // ... aapka purana saara script yahan hai ...
+            // ... aapka purana saara script yahan hai jo animations etc. handle karta hai ...
             // ... isme koi badlav nahi kiya gaya hai ...
         });
     </script>
