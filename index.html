@@ -3,49 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shubhzone - Final & Corrected</title>
+    <title>Shubhzone - Secure Profile & Payment</title>
+    
+    <!-- Firebase SDK Scripts -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <!-- Razorpay SDK Script -->
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
     <style>
-        /* CSS में कोई बदलाव नहीं है */
+        /* CSS में कोई बदलाव नहीं किया गया है */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        :root { --brand-cyan: #00d9ff; --bg-dark: #05070a; --bg-card: #10141b; --text-primary: #f0f6fc; --text-secondary: #a1a9b2; --border-color: rgba(255, 255, 255, 0.1); --success-color: #4CAF50; --danger-color: #ff4d4d; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg-dark); color: var(--text-secondary); display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; text-align: center; padding: 20px; margin: 0; }
-        .container { width: 100%; max-width: 450px; }
-        .logo { font-size: 2.5rem; font-weight: 700; color: var(--text-primary); text-decoration: none; margin-bottom: 30px; }
+        :root { 
+            --brand-cyan: #00d9ff; 
+            --bg-dark: #05070a; 
+            --bg-card: #10141b; 
+            --text-primary: #f0f6fc; 
+            --text-secondary: #a1a9b2; 
+            --border-color: rgba(255, 255, 255, 0.1); 
+            --success-color: #4CAF50;
+            --danger-color: #ff4d4d;
+        }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-dark); 
+            color: var(--text-secondary); 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            width: 100%;
+            max-width: 450px;
+        }
+        .logo { 
+            font-size: 2.5rem; 
+            font-weight: 700; 
+            color: var(--text-primary); 
+            text-decoration: none; 
+            margin-bottom: 30px; 
+        }
         .logo span { color: var(--brand-cyan); }
-        .form-container { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 30px; display: none; }
-        .form-container.active { display: block; }
-        h3 { color: var(--text-primary); margin-top: 0; margin-bottom: 25px; }
-        .form-group { margin-bottom: 20px; text-align: left; }
-        .form-group label { display: block; margin-bottom: 8px; font-size: 0.9rem; }
-        .form-group input { width: 100%; background-color: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; color: var(--text-primary); font-size: 1rem; box-sizing: border-box; }
-        .main-btn { background: var(--brand-cyan); color: #000; border: 1px solid var(--brand-cyan); padding: 14px 30px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; width: 100%; margin-top: 10px; transition: transform 0.2s; }
-        .main-btn:hover { transform: scale(1.02); }
-        .main-btn:disabled { background: #555; color: #aaa; border-color: #555; cursor: not-allowed; }
-        #logout-btn { background: transparent; color: var(--danger-color); border-color: var(--danger-color); }
-        .status-message { margin-top: 20px; padding: 15px; border-radius: 8px; display: none; }
-        .status-message.success { background-color: rgba(76, 175, 80, 0.2); color: var(--success-color); display: block; }
+        
+        .form-container {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 30px;
+            display: none; /* JavaScript ise dikhayega */
+        }
+        .form-container.active {
+            display: block;
+        }
+
+        h3 {
+            color: var(--text-primary);
+            margin-top: 0;
+            margin-bottom: 25px;
+        }
+        .form-group { 
+            margin-bottom: 20px; 
+            text-align: left;
+        }
+        .form-group label { 
+            display: block;
+            margin-bottom: 8px; 
+            font-size: 0.9rem;
+        }
+        .form-group input { 
+            width: 100%;
+            background-color: var(--bg-dark); 
+            border: 1px solid var(--border-color); 
+            border-radius: 8px; 
+            padding: 12px; 
+            color: var(--text-primary); 
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        .main-btn {
+            background: var(--brand-cyan);
+            color: #000;
+            border: 1px solid var(--brand-cyan);
+            padding: 14px 30px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            width: 100%;
+            margin-top: 10px;
+            transition: transform 0.2s;
+        }
+        .main-btn:hover {
+            transform: scale(1.02);
+        }
+        .main-btn:disabled {
+            background: #555;
+            color: #aaa;
+            border-color: #555;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        #logout-btn {
+            background: transparent;
+            color: var(--danger-color);
+            border-color: var(--danger-color);
+        }
+
+        .status-message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+            text-align: left;
+            line-height: 1.6;
+        }
+        .status-message.success {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: var(--success-color);
+            display: block;
+        }
     </style>
 </head>
 <body>
+
     <div class="container">
         <div class="logo">Shubh<span>zone</span></div>
+
+        <!-- YEH CONTAINER PROFILE BANANE KE LIYE HAI -->
         <div id="profile-container" class="form-container">
             <h3>Create Your Profile</h3>
             <form id="profile-form">
-                <div class="form-group"><label for="user-name">Full Name</label><input type="text" id="user-name" required></div>
-                <div class="form-group"><label for="user-email">Email Address</label><input type="email" id="user-email" required></div>
-                <div class="form-group"><label for="user-phone">Phone Number</label><input type="tel" id="user-phone" required></div>
+                <div class="form-group">
+                    <label for="user-name">Full Name</label>
+                    <input type="text" id="user-name" required placeholder="Your full name">
+                </div>
+                <div class="form-group">
+                    <label for="user-email">Email Address</label>
+                    <input type="email" id="user-email" required placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="user-phone">Phone Number</label>
+                    <input type="tel" id="user-phone" required placeholder="10-digit number">
+                </div>
                 <button type="submit" id="save-profile-btn" class="main-btn">Save Profile</button>
             </form>
         </div>
+
+        <!-- YEH CONTAINER PAYMENT AUR START KE LIYE HAI -->
         <div id="payment-container" class="form-container">
             <h3>Profile Saved!</h3>
             <p>Please proceed to payment to activate your account.</p>
-            <div id="user-info" class="status-message success"></div>
+            <div id="user-info" class="status-message success">
+                <!-- User info will be shown here by JavaScript -->
+            </div>
             <button id="payment-btn" class="main-btn">Proceed to Payment (₹3)</button>
             <button id="start-btn" class="main-btn" disabled>Start Using App</button>
             <button id="logout-btn" class="main-btn">Logout & Create New Profile</button>
@@ -53,12 +172,22 @@
     </div>
 
     <script>
-    // --- SECTION 1: INITIALIZATION ---
-    const firebaseConfig = { apiKey: "AIzaSyDuvWTMJL5edNG6cheez5pmwI2KlLCwtjw", authDomain: "shubhzone-4a6b0.firebaseapp.com", projectId: "shubhzone-4a6b0", storageBucket: "shubhzone-4a6b0.firebasestorage.app", messagingSenderId: "439309269785", appId: "1:439309269785:web:08a1256812648daafea388" };
+    // =================================================================
+    // SECTION 1: INITIALIZATION
+    // =================================================================
+    const firebaseConfig = { 
+        apiKey: "AIzaSyDuvWTMJL5edNG6cheez5pmwI2KlLCwtjw", 
+        authDomain: "shubhzone-4a6b0.firebaseapp.com", 
+        projectId: "shubhzone-4a6b0", 
+        storageBucket: "shubhzone-4a6b0.firebasestorage.app", 
+        messagingSenderId: "439309269785", 
+        appId: "1:439309269785:web:08a1256812648daafea388" 
+    };
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
-    // Element selectors are unchanged
+
+    // Element Selectors
     const profileContainer = document.getElementById('profile-container');
     const paymentContainer = document.getElementById('payment-container');
     const profileForm = document.getElementById('profile-form');
@@ -67,8 +196,12 @@
     const startBtn = document.getElementById('start-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const userInfoDiv = document.getElementById('user-info');
-
-    // --- SECTION 2: CORE LOGIC ---
+    
+    // =================================================================
+    // SECTION 2: CORE LOGIC
+    // =================================================================
+    
+    // Jab page load ho, to check karo ki user kaun hai
     auth.onAuthStateChanged(async (user) => {
         if (user) {
             const userDoc = await db.collection('users').doc(user.uid).get();
@@ -76,7 +209,7 @@
                 const userData = userDoc.data();
                 displayPaymentScreen(userData);
                 if (userData.paymentStatus === 'success') {
-                    updateUIToPaidState(); // UI ko update karne ke liye helper function
+                    updateUIToPaidState();
                 }
             } else {
                 displayProfileScreen();
@@ -86,12 +219,14 @@
         }
     });
 
+    // --- Profile Form Submit Logic ---
     profileForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         saveProfileBtn.disabled = true;
         saveProfileBtn.textContent = 'Saving...';
         const user = auth.currentUser;
         if (!user) { alert("Error: Not signed in."); return; }
+        
         const userData = {
             name: document.getElementById('user-name').value,
             email: document.getElementById('user-email').value,
@@ -99,6 +234,7 @@
             createdAt: new Date(),
             paymentStatus: 'inactive'
         };
+        
         try {
             await db.collection('users').doc(user.uid).set(userData);
             displayPaymentScreen(userData);
@@ -108,9 +244,10 @@
         }
     });
 
+    // --- Payment Button Click Logic ---
     paymentBtn.addEventListener('click', async () => {
         paymentBtn.disabled = true;
-        paymentBtn.textContent = 'Processing...'; // Yahi "Processing..." state hai jo atak gaya tha
+        paymentBtn.textContent = 'Processing...';
         const user = auth.currentUser;
         const userDoc = await db.collection('users').doc(user.uid).get();
         const userData = userDoc.data();
@@ -126,10 +263,10 @@
 
             const options = {
                 key: data.key_id,
-                order_id: data.order_id,
+                subscription_id: data.subscription_id,
                 name: "Shubhzone Services",
-                // ########## START: YAHI SABSE ZAROORI BADLAV HAI ##########
-                // 'handler' function ke andar UI update logic ko theek kiya gaya hai
+                description: "Account Activation Fee",
+                prefill: { name: userData.name, email: userData.email, contact: userData.phone },
                 handler: async (paymentResponse) => {
                     try {
                         const verificationResult = await verifyPaymentOnServer(paymentResponse);
@@ -137,24 +274,19 @@
                             await db.collection('users').doc(user.uid).update({
                                 paymentStatus: 'success',
                                 subscriptionId: verificationResult.subscriptionId,
-                                razorpayCustomerId: data.razorpayCustomerId,
                                 paymentTimestamp: new Date()
                             });
-                            // YAHI Galti thi: Humne UI ko update nahi kiya tha.
-                            // Ab hum UI ko update karne ke liye function call kar rahe hain.
                             updateUIToPaidState();
                             alert("Payment successful! Your account is now active.");
-                        } else {
+                        } else { 
                             throw new Error("Payment verification failed. Please try again.");
                         }
                     } catch (error) {
                         alert("Error after payment: " + error.message);
-                        // Agar verification me error aaye to button ko wapas normal karein
                         paymentBtn.disabled = false;
                         paymentBtn.textContent = 'Proceed to Payment (₹3)';
                     }
                 },
-                // ########################### END BADLAV ############################
                 modal: { ondismiss: () => { paymentBtn.disabled = false; paymentBtn.textContent = 'Proceed to Payment (₹3)'; } }
             };
             new Razorpay(options).open();
@@ -165,35 +297,42 @@
         }
     });
 
+    // --- Logout Button Logic ---
     logoutBtn.addEventListener('click', async () => {
-        if (confirm("Are you sure? This will let you create a new profile.")) {
+        if (confirm("Are you sure you want to log out? This will allow you to create a new profile.")) {
             await auth.signOut();
             window.location.reload();
         }
     });
 
-    // --- SECTION 3: HELPER FUNCTIONS ---
-    function displayProfileScreen() { profileContainer.classList.add('active'); paymentContainer.classList.remove('active'); }
+    // =================================================================
+    // SECTION 3: HELPER FUNCTIONS
+    // =================================================================
+    
+    function displayProfileScreen() { 
+        profileContainer.classList.add('active'); 
+        paymentContainer.classList.remove('active'); 
+    }
+
     function displayPaymentScreen(userData) {
         profileContainer.classList.remove('active');
         paymentContainer.classList.add('active');
         userInfoDiv.innerHTML = `<strong>Name:</strong> ${userData.name}<br><strong>Email:</strong> ${userData.email}`;
     }
-    // ########## START: NAYA HELPER FUNCTION ##########
-    // Yeh function UI ko "Paid" state me badalta hai
+    
     function updateUIToPaidState() {
         paymentBtn.disabled = true;
         paymentBtn.textContent = 'Payment Successful ✓';
         startBtn.disabled = false;
     }
-    // ###################### END #####################
+    
     async function verifyPaymentOnServer(response) {
         const res = await fetch('https://shubhmed.onrender.com/verify-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_order_id: response.razorpay_order_id,
+                razorpay_subscription_id: response.razorpay_subscription_id,
                 razorpay_signature: response.razorpay_signature
             })
         });
