@@ -347,7 +347,7 @@
         });
         
         // हम सर्वर के जवाब को JSON में बदलेंगे ताकि एरर को भी पकड़ सकें।
-        const result = await res.json();
+        const const = await res.json();
         if (!res.ok) {
             // अगर सर्वर 400 या 500 जैसा स्टेटस कोड भेजता है, तो हम उसे एक एरर मानेंगे।
             throw new Error(result.error || "Verification request failed.");
