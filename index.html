@@ -1331,7 +1331,7 @@
             if(modalProceedBtn) modalProceedBtn.addEventListener('click', () => {
                 closeWarningModal();
                 renderApps();
-                showPage(otherAppsPage);
+                showPage(other-apps-page);
             });
             
             if(langHiBtn) langHiBtn.addEventListener('click', () => {
@@ -1621,7 +1621,7 @@
         });
     </script>
     
-    <!-- New Script for Razorpay AutoPay Logic -->
+    <!-- === यहाँ ज़रूरी बदलाव किया गया है === -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const paymentButton = document.getElementById('payment-btn');
@@ -1648,7 +1648,8 @@
 
             paymentButton.addEventListener('click', async () => {
                 try {
-                    const response = await fetch('/api/create-subscription', {
+                    // अब यह नए और सही API endpoint को कॉल करेगा
+                    const response = await fetch('/api/create-mandate-order', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1660,17 +1661,22 @@
                         throw new Error(errorData.error || 'Network response was not ok');
                     }
                     
+                    // अब यह order_id और customer_id लेगा, subscription_id नहीं
                     const data = await response.json();
-                    const subscriptionId = data.subscription_id;
+                    const orderId = data.order_id;
+                    const customerId = data.customer_id;
                     const razorpayKeyId = data.key_id;
 
                     const options = {
                         key: razorpayKeyId,
-                        subscription_id: subscriptionId,
                         name: "Shubhzone Activation",
-                        description: "₹2 fee for AutoPay activation",
+                        description: "₹2 initial payment for AutoPay setup",
+                        order_id: orderId, // order_id का इस्तेमाल करें
+                        customer_id: customerId, // customer_id का इस्तेमाल करें
+                        recurring: true, // Razorpay को बताएं कि यह एक ऑटोपे है
                         handler: function (response) {
-                            alert("Payment Successful! AutoPay is now active. All features are unlocked.");
+                            // पेमेंट सफल होने पर आप यहाँ और भी वेरिफिकेशन कर सकते हैं
+                            alert("Payment Successful! AutoPay permission is now active. You can be charged up to ₹500 in the future.");
                             localStorage.setItem('shubhzonePaymentDone', 'true');
                             activateStartButtons();
                         },
@@ -1679,8 +1685,20 @@
                             email: "user@shubhzone.shop",
                             contact: "9999999999"
                         },
+                        // यह मैंडेट की जानकारी है जो Razorpay को चाहिए
+                        notes: {
+                            "purpose": "Setting up UPI AutoPay for Shubhzone"
+                        },
                         theme: {
                             color: "#00d9ff"
+                        },
+                        // यह सबसे ज़रूरी हिस्सा है
+                        "token": {
+                            "recurring": true,
+                            "max_amount": 50000, // ₹500 (500 * 100 पैसे)
+                            "frequency": "as_presented", // आप जब चाहें तब चार्ज कर सकते हैं
+                            "auth_type": "upi",
+                            "description": "Permission to charge for Shubhzone services"
                         }
                     };
 
