@@ -1,23 +1,11 @@
 # Netlify Configuration for shubhzone.shop
 
-# --- Rule 1: Force WWW Redirect ---
-# This rule is crucial for UPI AutoPay. It redirects all traffic
-# from the non-www domain to the www domain, which is registered
-# with Razorpay. This resolves the URL mismatch issue with NPCI.
-
-[[redirects]]
-  from = "https://shubhzone.shop/*"
-  to = "https://www.shubhzone.shop/:splat"
-  status = 301
-  force = true
-
-
-# --- Rule 2: API Proxy ---
-# This rule proxies all API requests to the Render backend,
-# allowing the frontend to securely communicate with the server.
+# --- API Proxy Rule ---
+# This is the ONLY rule needed in this file. It proxies all API 
+# requests (from /api/*) to the Render backend. The 'www' redirect
+# must be handled in the Netlify UI settings to avoid conflicts.
 
 [[redirects]]
   from = "/api/*"
   to = "https://shubhzone-backend.onrender.com/:splat"
   status = 200
-  force = true
