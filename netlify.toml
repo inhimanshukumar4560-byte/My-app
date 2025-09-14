@@ -1,0 +1,12 @@
+# Netlify Redirects & Proxy Rules
+
+# This rule proxies all API requests from the frontend (/api/*)
+# to the Render backend service. This is crucial for securely
+# creating the Razorpay subscription without exposing backend URLs
+# or dealing with CORS issues.
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://shubzone-backend.onrender.com/:splat"
+  status = 200
+  force = true
