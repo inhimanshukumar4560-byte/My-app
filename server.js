@@ -8,15 +8,8 @@ require('dotenv').config(); // यह लोकल टेस्टिंग क�
 // Express ऐप बनाना
 const app = express();
 
-// CORS कॉन्फ़िगरेशन (यह पहले से ही सही है, इसे ऐसे ही रहने दें)
-const corsOptions = {
-  origin: [
-    'https://shubhzone.shop',
-    'https://www.shubhzone.shop'
-  ],
-  optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
+// CORS कॉन्फ़िगरेशन (यह सभी वेबसाइटों से आने वाली रिक्वेस्ट को अनुमति देता है, जो Netlify प्रॉक्सी के लिए ज़रूरी है)
+app.use(cors());
 
 // Middleware का इस्तेमाल करना
 app.use(express.json()); // JSON रिक्वेस्ट बॉडी को समझने के लिए
@@ -29,12 +22,13 @@ const razorpay = new Razorpay({
 
 // --- API ENDPOINTS ---
 
-// 1. eMandate (ऑटोपे) बनाने के लिए Endpoint
-// इसे '/create-subscription' से बदलकर '/create-mandate-order' कर दिया गया है ताकि कोई भ्रम न हो
-app.post('/api/create-mandate-order', async (req, res) => {
+// eMandate (ऑटोपे) बनाने के लिए Endpoint
+// === यहाँ सबसे ज़रूरी बदलाव किया गया है ===
+// Netlify के नियम के अनुसार, हमने यहाँ से '/api' हटा दिया है।
+// अब यह सीधे Netlify से आने वाली रिक्वेस्ट को स्वीकार करेगा।
+app.post('/create-mandate-order', async (req, res) => {
     try {
         // चरण 1: एक नया ग्राहक बनाना
-        // भविष्य में आप इस ग्राहक की जानकारी को अपने डेटाबेस से भी ला सकते हैं
         const customerOptions = {
             name: 'Shubhzone User',
             email: `user_${Date.now()}@shubhzone.shop`, // हर बार एक यूनिक ईमेल बनाएं
@@ -62,7 +56,6 @@ app.post('/api/create-mandate-order', async (req, res) => {
         console.log('Order for mandate created successfully:', order.id);
 
         // फ्रंटएंड को order_id, customer_id और key_id भेजना
-        // HTML/JavaScript को इन तीनों की ज़रूरत पड़ेगी
         res.json({
             order_id: order.id,
             customer_id: customer.id,
@@ -76,8 +69,7 @@ app.post('/api/create-mandate-order', async (req, res) => {
 });
 
 
-// 2. Webhook सुनने के लिए Endpoint (यह बहुत ज़रूरी है)
-// Razorpay इस '/webhook' Endpoint पर पेमेंट की जानकारी भेजेगा
+// Webhook सुनने के लिए Endpoint (इसमें कोई बदलाव नहीं किया गया है, यह पहले से ही सही है)
 app.post('/webhook', (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
@@ -96,9 +88,7 @@ app.post('/webhook', (req, res) => {
             
             const event = req.body.event;
             const payload = req.body.payload;
-
-            // अब आप नए तरह के इवेंट्स को सुनेंगे
-            // उदाहरण: 'mandate.activated', 'payment.captured'
+            
             console.log('EVENT RECEIVED:', event);
 
             if (event === 'mandate.activated') {
@@ -109,7 +99,7 @@ app.post('/webhook', (req, res) => {
              if (event === 'payment.captured') {
                 console.log('PAYMENT CAPTURED!');
                 console.log('Payment ID:', payload.payment.entity.id);
-                console.log('Amount:', payload.payment.entity.amount / 100, 'INR');
+                 console.log('Amount:', payload.payment.entity.amount / 100, 'INR');
             }
 
             // Razorpay को बताना कि हमें मैसेज मिल गया
@@ -129,7 +119,7 @@ app.post('/webhook', (req, res) => {
 
 
 // सर्वर को स्टार्ट करना
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`Backend server is running on port ${PORT}`);
 });
