@@ -1,11 +1,12 @@
-# Netlify Configuration for shubhzone.shop
+# Netlify Redirects & Proxy Rules
 
-# --- API Proxy Rule ---
-# This is the ONLY rule needed in this file. It proxies all API 
-# requests (from /api/*) to the Render backend. The 'www' redirect
-# must be handled in the Netlify UI settings to avoid conflicts.
+# This rule proxies all API requests from the frontend (/api/*)
+# to the Render backend service. This is crucial for securely
+# creating the Razorpay subscription without exposing backend URLs
+# or dealing with CORS issues.
 
 [[redirects]]
   from = "/api/*"
-  to = "https://shubhzone-backend.onrender.com/:splat"
+  to = "https://shubzone-backend.onrender.com/:splat"
   status = 200
+  force = true
