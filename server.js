@@ -23,7 +23,6 @@ const razorpay = new Razorpay({
 // --- API ENDPOINTS ---
 
 // eMandate (ऑटोपे) बनाने के लिए Endpoint
-// === यहाँ सबसे ज़रूरी बदलाव किया गया है ===
 // Netlify के नियम के अनुसार, हमने यहाँ से '/api' हटा दिया है।
 // अब यह सीधे Netlify से आने वाली रिक्वेस्ट को स्वीकार करेगा।
 app.post('/create-mandate-order', async (req, res) => {
@@ -37,9 +36,9 @@ app.post('/create-mandate-order', async (req, res) => {
         const customer = await razorpay.customers.create(customerOptions);
         console.log('Customer created successfully:', customer.id);
 
-        // चरण 2: ₹2 का एक शुरुआती ऑर्डर बनाना ताकि मैंडेट सक्रिय हो सके
+        // चरण 2: ₹5 का एक शुरुआती ऑर्डर बनाना ताकि मैंडेट सक्रिय हो सके
         const orderOptions = {
-            amount: 200, // राशि हमेशा पैसे में होती है (₹2 = 200 पैसे)
+            amount: 500, // राशि हमेशा पैसे में होती है (₹5 = 500 पैसे) === यही एकमात्र ज़रूरी बदलाव है ===
             currency: 'INR',
             receipt: `receipt_order_${Date.now()}`,
             payment: {
@@ -91,13 +90,14 @@ app.post('/webhook', (req, res) => {
             
             console.log('EVENT RECEIVED:', event);
 
-            if (event === 'mandate.activated') {
-                console.log('MANDATE ACTIVATED! You can now charge this customer.');
-                console.log('Mandate ID:', payload.mandate.entity.id);
-                console.log('Payment ID for activation:', payload.mandate.entity.payment_method.initial_payment_id);
+            // यहाँ आप अपने चुने हुए Webhook Events के आधार पर काम कर सकते हैं
+            // उदाहरण के लिए:
+            if (event === 'subscription.activated') {
+                console.log('SUBSCRIPTION (eMandate) ACTIVATED! You can now charge this customer.');
+                console.log('Subscription ID:', payload.subscription.entity.id);
             }
              if (event === 'payment.captured') {
-                console.log('PAYMENT CAPTURED!');
+                console.log('INITIAL PAYMENT CAPTURED!');
                 console.log('Payment ID:', payload.payment.entity.id);
                  console.log('Amount:', payload.payment.entity.amount / 100, 'INR');
             }
