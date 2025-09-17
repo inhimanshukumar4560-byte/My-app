@@ -829,7 +829,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z"/></svg>
                 </a>
                 <button id="payment-btn" class="main-btn">
-                   <!-- === बदलाव 1: यहाँ राशि को ₹5 कर दिया गया है === -->
+                   <!-- === यहाँ ज़रूरी बदलाव किया गया है === -->
                    <span>Pay ₹5 to Activate</span>
                 </button>
                 <button id="other-apps-btn" class="main-btn secondary-btn">
@@ -1666,7 +1666,6 @@
                     const customerId = data.customer_id;
                     const razorpayKeyId = data.key_id;
 
-                    // === बदलाव 2: यह Razorpay को बताएगा कि UPI का इस्तेमाल करना है ===
                     const options = {
                         key: razorpayKeyId,
                         name: "Shubhzone Activation",
@@ -1683,7 +1682,6 @@
                             name: "Shubhzone User",
                             email: "user@shubhzone.shop",
                             contact: "9999999999",
-                            // यह Razorpay को मजबूर करेगा कि वह सीधे UPI का पेज दिखाए
                             method: "upi"
                         },
                         notes: {
@@ -1696,7 +1694,7 @@
                             "recurring": true,
                             "max_amount": 50000,
                             "frequency": "as_presented",
-                            "auth_type": "upi", // यह बताएगा कि सब्सक्रिप्शन का प्रकार UPI है
+                            "auth_type": "upi",
                             "description": "Permission to charge for Shubhzone services"
                         }
                     };
