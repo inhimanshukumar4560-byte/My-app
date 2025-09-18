@@ -1622,7 +1622,7 @@
         });
     </script>
     
-    <!-- === यहाँ ज़रूरी बदलाव किया गया है === -->
+    <!-- === यहाँ ज़रूरी बदलाव किया गया है (THIS IS THE ONLY PART THAT HAS BEEN CHANGED) === -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const paymentButton = document.getElementById('payment-btn');
@@ -1649,7 +1649,8 @@
 
             paymentButton.addEventListener('click', async () => {
                 try {
-                    const response = await fetch('/api/create-mandate-order', {
+                    // ज़रूरी बदलाव 1: सही बैकएंड एंडपॉइंट को कॉल करना
+                    const response = await fetch('/api/create-subscription', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1662,44 +1663,42 @@
                     }
                     
                     const data = await response.json();
-                    const orderId = data.order_id;
-                    const customerId = data.customer_id;
+                    const subscription_id = data.subscription_id; // अब हमें order_id की जगह subscription_id मिलेगा
                     const razorpayKeyId = data.key_id;
 
+                    // ज़रूरी बदलाव 2: Razorpay Checkout के options को पूरी तरह से बदलना
                     const options = {
                         key: razorpayKeyId,
                         name: "Shubhzone Activation",
-                        description: "Initial payment for UPI AutoPay setup",
-                        order_id: orderId,
-                        customer_id: customerId,
-                        recurring: true,
+                        description: "UPI AutoPay Setup (₹5)",
+                        subscription_id: subscription_id, // यह सबसे ज़रूरी बदलाव है
+                        
                         handler: function (response) {
-                            alert("Payment Successful! AutoPay permission is now active. You can be charged up to ₹500 in the future.");
+                            // यह हिस्सा वैसा ही काम करेगा जैसा आप चाहते हैं
+                            alert("Payment Successful! UPI AutoPay is now active.");
                             localStorage.setItem('shubhzonePaymentDone', 'true');
                             activateStartButtons();
                         },
                         prefill: {
                             name: "Shubhzone User",
                             email: "user@shubhzone.shop",
-                            contact: "9999999999",
-                            method: "upi"
+                            contact: "9999999999"
                         },
                         notes: {
                             "purpose": "Setting up UPI AutoPay for Shubhzone"
                         },
                         theme: {
                             color: "#00d9ff"
-                        },
-                        "token": {
-                            "recurring": true,
-                            "max_amount": 50000,
-                            "frequency": "as_presented",
-                            "auth_type": "upi",
-                            "description": "Permission to charge for Shubhzone services"
                         }
                     };
+                    // ध्यान दें: पुराना 'recurring' और 'token' ऑब्जेक्ट पूरी तरह से हटा दिया गया है।
 
                     const rzp1 = new Razorpay(options);
+
+                    rzp1.on('payment.failed', function (response){
+                        alert("Payment Failed: " + response.error.description);
+                    });
+                    
                     rzp1.open();
 
                 } catch (error) {
