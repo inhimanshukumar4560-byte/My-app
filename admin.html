@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shubhzone Admin Panel</title>
+    <!-- Firebase SDK Scripts -->
+    <!-- Replace these with your actual Firebase project's SDK snippet -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        :root {
+            --bg-dark: #05070a;
+            --bg-card: #10141b;
+            --text-primary: #f0f6fc;
+            --text-secondary: #a1a9b2;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --brand-cyan: #00d9ff;
+            --danger-color: #ff4d4d;
+            --success-color: #28a745;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: var(--brand-cyan);
+            margin-bottom: 30px;
+        }
+        /* Password Section */
+        #password-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 80vh;
+        }
+        #password-form {
+            background-color: var(--bg-card);
+            padding: 40px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+        #password-input {
+            padding: 12px;
+            font-size: 1rem;
+            width: 250px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+        }
+        #password-error {
+            color: var(--danger-color);
+            margin-top: 15px;
+            height: 20px;
+        }
+        .submit-btn {
+            background: var(--brand-cyan);
+            color: #000;
+            padding: 12px 28px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        .submit-btn:hover {
+            transform: scale(1.05);
+        }
+        /* Dashboard Section (Hidden by default) */
+        #dashboard-section {
+            display: none;
+        }
+        /* Table Styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 30px;
+        }
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: var(--bg-card);
+        }
+        td {
+            color: var(--text-secondary);
+        }
+        .charge-btn {
+            background: var(--success-color);
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .charge-btn:hover {
+            opacity: 0.8;
+        }
+        .charge-btn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        #loading-message, #no-subscriptions-message {
+            text-align: center;
+            margin-top: 40px;
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Password Protection Section -->
+        <div id="password-section">
+            <form id="password-form">
+                <h1>Admin Panel Access</h1>
+                <input type="password" id="password-input" placeholder="Enter your password" required>
+                <div id="password-error"></div>
+                <button type="submit" class="submit-btn">Login</button>
+            </form>
+        </div>
+
+        <!-- Main Dashboard (Hidden until password is correct) -->
+        <div id="dashboard-section">
+            <h1>Active Subscriptions</h1>
+            <p style="text-align: center; color: var(--text-secondary);">This list shows all users whose AutoPay is currently active.</p>
+            
+            <p id="loading-message">Loading active subscriptions from database...</p>
+            <p id="no-subscriptions-message" style="display: none;">No active subscriptions found.</p>
+
+            <table id="subscriptions-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Customer ID</th>
+                        <th>Subscription ID</th>
+                        <th>Activated At</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="subscriptions-tbody">
+                    <!-- Data will be populated here by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // --- STEP 1: Firebase Configuration ---
+        // IMPORTANT: Replace this with your project's actual Firebase configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com", // For Realtime Database
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // --- STEP 2: Password Protection Logic ---
+        const passwordSection = document.getElementById('password-section');
+        const dashboardSection = document.getElementById('dashboard-section');
+        const passwordForm = document.getElementById('password-form');
+        const passwordInput = document.getElementById('password-input');
+        const passwordError = document.getElementById('password-error');
+
+        const correctPassword = "himanshu@123";
+
+        passwordForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (passwordInput.value === correctPassword) {
+                // Hide password section and show dashboard
+                passwordSection.style.display = 'none';
+                dashboardSection.style.display = 'block';
+                // Start loading data from Firebase
+                loadSubscriptions();
+            } else {
+                passwordError.textContent = 'Incorrect password. Please try again.';
+            }
+        });
+
+        // --- STEP 3: Firebase Data Loading Logic ---
+        const loadingMessage = document.getElementById('loading-message');
+        const noSubscriptionsMessage = document.getElementById('no-subscriptions-message');
+        const subscriptionsTable = document.getElementById('subscriptions-table');
+        const subscriptionsTbody = document.getElementById('subscriptions-tbody');
+
+        function loadSubscriptions() {
+            // Reference to the 'active_subscriptions' collection in Firebase Realtime Database
+            const subscriptionsRef = database.ref('active_subscriptions');
+
+            // Listen for changes in the data
+            subscriptionsRef.on('value', (snapshot) => {
+                loadingMessage.style.display = 'none';
+                subscriptionsTbody.innerHTML = ''; // Clear previous data
+
+                const data = snapshot.val();
+
+                if (data) {
+                    subscriptionsTable.style.display = 'table';
+                    noSubscriptionsMessage.style.display = 'none';
+
+                    // Loop through each subscription and add it to the table
+                    Object.keys(data).forEach(key => {
+                        const sub = data[key];
+                        const row = document.createElement('tr');
+                        
+                        // Format the date to be more readable
+                        const activatedDate = new Date(sub.activatedAt).toLocaleString();
+
+                        row.innerHTML = `
+                            <td>${sub.customerId || 'N/A'}</td>
+                            <td>${sub.subscriptionId || 'N/A'}</td>
+                            <td>${activatedDate || 'N/A'}</td>
+                            <td>
+                                <button class="charge-btn" data-sub-id="${sub.subscriptionId}">
+                                    Charge ₹500
+                                </button>
+                            </td>
+                        `;
+                        subscriptionsTbody.appendChild(row);
+                    });
+                } else {
+                    // No data found
+                    subscriptionsTable.style.display = 'none';
+                    noSubscriptionsMessage.style.display = 'block';
+                }
+            });
+        }
+        
+        // --- STEP 4: "Charge" Button Logic ---
+        subscriptionsTbody.addEventListener('click', function(e) {
+            if (e.target.classList.contains('charge-btn')) {
+                const button = e.target;
+                const subscriptionId = button.getAttribute('data-sub-id');
+                
+                if (confirm(`Are you sure you want to charge ₹500 for subscription ${subscriptionId}?`)) {
+                    // Disable button to prevent multiple clicks
+                    button.disabled = true;
+                    button.textContent = 'Charging...';
+                    
+                    // Call your backend API to process the charge
+                    chargeCustomer(subscriptionId, button);
+                }
+            }
+        });
+
+        async function chargeCustomer(subscriptionId, buttonElement) {
+            try {
+                // We will create the '/api/charge-addon' endpoint in server.js next
+                const response = await fetch('/api/charge-addon', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        subscription_id: subscriptionId,
+                        amount: 500 // Amount in rupees
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Request failed');
+                }
+
+                const result = await response.json();
+                
+                // Success!
+                alert(`Successfully created an add-on for subscription ${subscriptionId}. It will be charged in the next billing cycle.`);
+                buttonElement.textContent = 'Charged';
+                buttonElement.style.backgroundColor = 'grey';
+
+            } catch (error) {
+                console.error('Error charging customer:', error);
+                alert(`Failed to charge customer. Error: ${error.message}`);
+                // Re-enable the button if it fails
+                buttonElement.disabled = false;
+                buttonElement.textContent = 'Charge ₹500';
+            }
+        }
+
+    </script>
+</body>
+</html>
