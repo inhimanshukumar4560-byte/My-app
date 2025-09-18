@@ -22,50 +22,36 @@ const razorpay = new Razorpay({
 
 // --- API ENDPOINTS ---
 
-// eMandate (ऑटोपे) बनाने के लिए Endpoint
-// Netlify के नियम के अनुसार, हमने यहाँ से '/api' हटा दिया है।
-// अब यह सीधे Netlify से आने वाली रिक्वेस्ट को स्वीकार करेगा।
-app.post('/create-mandate-order', async (req, res) => {
+// === यहाँ ज़रूरी बदलाव किया गया है ===
+// eMandate (ऑटोपे) बनाने के लिए सही Endpoint (Subscriptions API का उपयोग करके)
+app.post('/create-subscription', async (req, res) => {
     try {
-        // चरण 1: एक नया ग्राहक बनाना
-        const customerOptions = {
-            name: 'Shubhzone User',
-            email: `user_${Date.now()}@shubhzone.shop`, // हर बार एक यूनिक ईमेल बनाएं
-            contact: '9999999999'
-        };
-        const customer = await razorpay.customers.create(customerOptions);
-        console.log('Customer created successfully:', customer.id);
+        // चरण 1: आपकी Plan ID यहाँ डाल दी गई है
+        const plan_id = "plan_RIgEghN6aicmgB"; // <<<--- आपकी Plan ID यहाँ है
 
-        // चरण 2: ₹5 का एक शुरुआती ऑर्डर बनाना ताकि मैंडेट सक्रिय हो सके
-        const orderOptions = {
-            amount: 500, // राशि हमेशा पैसे में होती है (₹5 = 500 पैसे) === यही एकमात्र ज़रूरी बदलाव है ===
-            currency: 'INR',
-            receipt: `receipt_order_${Date.now()}`,
-            payment: {
-                capture: 'automatic',
-                capture_options: {
-                    automatic_expiry_period: 12, // 12 मिनट में पेमेंट कैप्चर करें
-                    manual_expiry_period: 720, // 12 घंटे का मैनुअल कैप्चर पीरियड
-                    refund_speed: 'normal'
-                }
-            }
+        // चरण 2: एक नया सब्सक्रिप्शन बनाना
+        const subscriptionOptions = {
+            plan_id: plan_id,
+            total_count: 48, // सब्सक्रिप्शन कितने बिलिंग साइकिल तक चलेगा (उदाहरण: 48 महीने = 4 साल)
+            quantity: 1,
+            customer_notify: 1, // रेजरपे ग्राहक को सफल चार्ज और अन्य सूचनाएं भेजेगा
         };
 
-        const order = await razorpay.orders.create(orderOptions);
-        console.log('Order for mandate created successfully:', order.id);
+        const subscription = await razorpay.subscriptions.create(subscriptionOptions);
+        console.log('Subscription created successfully:', subscription.id);
 
-        // फ्रंटएंड को order_id, customer_id और key_id भेजना
+        // फ्रंटएंड को subscription_id और आपकी key_id भेजना
         res.json({
-            order_id: order.id,
-            customer_id: customer.id,
+            subscription_id: subscription.id,
             key_id: process.env.RAZORPAY_KEY_ID
         });
 
     } catch (error) {
-        console.error('Error creating Razorpay mandate order:', error);
-        res.status(500).json({ error: 'Something went wrong with the payment gateway.' });
+        console.error('Error creating Razorpay subscription:', error);
+        res.status(500).json({ error: 'Something went wrong while creating the subscription.' });
     }
 });
+// ======================================
 
 
 // Webhook सुनने के लिए Endpoint (इसमें कोई बदलाव नहीं किया गया है, यह पहले से ही सही है)
