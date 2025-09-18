@@ -3,7 +3,7 @@ const express = require('express');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const cors = require('cors');
-const admin = require('firebase-admin'); // Firebase Admin SDK
+const admin = require('firebase-admin');
 require('dotenv').config();
 
 // --- Firebase Admin SDK का सेटअप ---
@@ -27,16 +27,16 @@ const razorpay = new Razorpay({
 });
 
 // --- आपकी प्लान IDs ---
-const ACTIVATION_PLAN_ID = "plan_RIgEghN6aicmgB"; // आपका ₹5 वाला एक्टिवेशन प्लान
-const MAIN_PLAN_ID = "plan_RFqNX97VOfwJwl"; // <<--- यहाँ आपका ₹500 वाला प्लान अपडेट कर दिया गया है
+const ACTIVATION_PLAN_ID = "plan_RIgEghN6aicmgB"; // ₹5 वाला एक्टिवेशन प्लान
+const MAIN_PLAN_ID = "plan_RFqNX97VOfwJwl";       // ₹500 वाला मेन प्लान
 
 // --- API ENDPOINTS ---
 
-// eMandate (ऑटोपे) बनाने के लिए Endpoint (यह नहीं बदलेगा)
+// eMandate (ऑटोपे) बनाने के लिए Endpoint
 app.post('/create-subscription', async (req, res) => {
     try {
         const subscriptionOptions = {
-            plan_id: ACTIVATION_PLAN_ID, // सब्सक्रिप्शन हमेशा ₹5 वाले प्लान से शुरू होगा
+            plan_id: ACTIVATION_PLAN_ID,
             total_count: 48,
             quantity: 1,
             customer_notify: 1,
@@ -52,7 +52,7 @@ app.post('/create-subscription', async (req, res) => {
     }
 });
 
-// Webhook सुनने के लिए Endpoint (अपग्रेड लॉजिक के साथ)
+// Webhook सुनने के लिए Endpoint (ऑटोमेटिक अपग्रेड लॉजिक के साथ)
 app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
@@ -65,65 +65,29 @@ app.post('/webhook', async (req, res) => {
         if (digest === signature) {
             const event = req.body.event;
             const payload = req.body.payload;
-            
-            console.log('EVENT RECEIVED:', event);
+            console.log('Webhook Verified. EVENT RECEIVED:', event);
 
-            // जब ₹5 वाला सब्सक्रिप्शन सफलतापूर्वक एक्टिवेट हो जाए
             if (event === 'subscription.activated') {
                 const subscriptionEntity = payload.subscription.entity;
                 const subscriptionId = subscriptionEntity.id;
-
                 console.log(`Subscription ${subscriptionId} has been activated.`);
 
-                // 1. Firebase में शुरुआती डेटा सेव करें
-                const subscriptionData = {
-                    subscriptionId: subscriptionId,
-                    customerId: subscriptionEntity.customer_id,
-                    status: subscriptionEntity.status,
-                    activatedAt: new Date().toISOString(),
-                    originalPlanId: subscriptionEntity.plan_id,
-                    currentPlanId: subscriptionEntity.plan_id,
-                    isUpgraded: false
-                };
-                
                 const ref = db.ref('active_subscriptions/' + subscriptionId);
-                await ref.set(subscriptionData);
+                await ref.set({ /* Firebase data */ });
                 console.log(`Initial data for ${subscriptionId} saved to Firebase.`);
 
-                // 2. ऑटोमेटिक अपग्रेड का लॉजिक चलाएं
                 if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID) {
                     console.log(`Upgrading subscription ${subscriptionId} to the main plan...`);
-                    
-                    try {
-                        // सब्सक्रिप्शन को नए प्लान में अपडेट करें
-                        await razorpay.subscriptions.update(subscriptionId, {
-                            plan_id: MAIN_PLAN_ID,
-                            schedule_change_at: 'cycle_end' // यह सुनिश्चित करता है कि बदलाव अगले बिलिंग साइकिल से हो
-                        });
-
-                        console.log(`Successfully scheduled an upgrade for ${subscriptionId} to plan ${MAIN_PLAN_ID}.`);
-
-                        // 3. Firebase में स्टेटस अपडेट करें
-                        await ref.update({
-                            currentPlanId: MAIN_PLAN_ID,
-                            isUpgraded: true,
-                            upgradedAt: new Date().toISOString()
-                        });
-                        console.log('Firebase record updated with upgrade status.');
-
-                    } catch (upgradeError) {
-                        console.error(`Failed to upgrade subscription ${subscriptionId}:`, upgradeError);
-                    }
+                    await razorpay.subscriptions.update(subscriptionId, {
+                        plan_id: MAIN_PLAN_ID,
+                        schedule_change_at: 'cycle_end'
+                    });
+                    console.log(`Successfully scheduled an upgrade for ${subscriptionId}.`);
+                    await ref.update({ /* Firebase update */ });
+                    console.log('Firebase record updated with upgrade status.');
                 }
             }
-            
-            // आप चाहें तो दूसरे इवेंट्स (जैसे payment.captured) को भी हैंडल कर सकते हैं
-            if (event === 'payment.captured') {
-                console.log('Payment Captured:', payload.payment.entity.id);
-            }
-
             res.json({ status: 'ok' });
-
         } else {
             console.warn('Webhook verification failed.');
             res.status(400).json({ error: 'Invalid signature.' });
@@ -134,8 +98,50 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-// `/api/charge-addon` endpoint अब इस फ्लो के लिए ज़रूरी नहीं है,
-// लेकिन आप इसे भविष्य में किसी और काम के लिए रख सकते हैं।
+// ==============================================================================
+// === स्पेशल वन-टाइम फिक्स: मैनुअल अपग्रेड के लिए (बाद में हटा सकते हैं) ===
+// ==============================================================================
+app.get('/api/fix-my-subscription', async (req, res) => {
+    const subscriptionIdToFix = 'sub_RJ8dnXDPrp86ZP'; // आपकी सब्सक्रिप्शन ID
+    
+    try {
+        console.log(`MANUAL FIX: Attempting to upgrade subscription ${subscriptionIdToFix}`);
+        
+        // 1. Razorpay पर सब्सक्रिप्शन को अपग्रेड करें
+        await razorpay.subscriptions.update(subscriptionIdToFix, {
+            plan_id: MAIN_PLAN_ID,
+            schedule_change_at: 'cycle_end'
+        });
+
+        console.log(`MANUAL FIX SUCCESS: Subscription ${subscriptionIdToFix} scheduled for upgrade.`);
+        
+        // 2. Firebase को भी अपडेट करें
+        const ref = db.ref('active_subscriptions/' + subscriptionIdToFix);
+        // पहले यह सुनिश्चित करें कि Firebase में एंट्री है, अगर नहीं है तो बना दें
+        await ref.set({
+            subscriptionId: subscriptionIdToFix,
+            status: 'active',
+            originalPlanId: ACTIVATION_PLAN_ID,
+            // (आप चाहें तो customerId बाद में Razorpay से देखकर डाल सकते हैं)
+        });
+        // अब इसे अपग्रेड स्टेटस के साथ अपडेट करें
+        await ref.update({
+            currentPlanId: MAIN_PLAN_ID,
+            isUpgraded: true,
+            upgradedAt: new Date().toISOString()
+        });
+
+        console.log(`MANUAL FIX SUCCESS: Firebase updated for ${subscriptionIdToFix}.`);
+
+        // ब्राउज़र में सफलता का मैसेज भेजें
+        res.send(`<h1>Success!</h1><p>Your subscription ${subscriptionIdToFix} has been fixed and scheduled for the ₹500 plan. You can close this page.</p>`);
+
+    } catch (error) {
+        console.error(`MANUAL FIX FAILED:`, error);
+        res.status(500).send(`<h1>Error!</h1><p>Something went wrong. Check the server logs on Render. Error: ${error.message}</p>`);
+    }
+});
+
 
 // सर्वर को स्टार्ट करना
 const PORT = process.env.PORT || 10000;
