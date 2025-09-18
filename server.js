@@ -88,7 +88,8 @@ app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
     try {
-        const shasum = crypto.createHmac('sha266', secret);
+        // === यहाँ sha256 होना चाहिए, मैंने इसे भी ठीक कर दिया है ===
+        const shasum = crypto.createHmac('sha256', secret);
         shasum.update(JSON.stringify(req.body));
         const digest = shasum.digest('hex');
 
@@ -118,8 +119,8 @@ app.post('/webhook', async (req, res) => {
                     });
                     console.log(`Step 2/2: Successfully created new ₹500 subscription ${newSubscription.id} for the same customer.`);
 
-                    // Firebase में नए वाले सब्सक्रिप्शन का रिकॉर्ड बना दें
-                    const ref = db.ref('active_subscriptions/' a newSubscription.id);
+                    // === यहाँ वह सिंटैक्स एरर ठीक कर दी गई है ===
+                    const ref = db.ref('active_subscriptions/' + newSubscription.id);
                     await ref.set({
                         subscriptionId: newSubscription.id,
                         customerId: customerId,
@@ -132,6 +133,7 @@ app.post('/webhook', async (req, res) => {
             }
             res.json({ status: 'ok' });
         } else {
+            console.warn("Webhook verification failed. Check your secret key.");
             res.status(400).json({ error: 'Invalid signature.' });
         }
     } catch (error) {
