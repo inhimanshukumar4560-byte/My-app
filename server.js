@@ -6,29 +6,18 @@ const cors = require('cors');
 const admin = require('firebase-admin'); // Firebase Admin SDK
 require('dotenv').config();
 
-// --- Firebase Admin SDK का सेटअप (आपके तरीके के अनुसार) ---
-// एनवायरनमेंट वेरिएबल से JSON स्ट्रिंग को पढ़ना
+// --- Firebase Admin SDK का सेटअप ---
 const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-// JSON स्ट्रिंग को पार्स करके ऑब्जेक्ट बनाना
 const serviceAccount = JSON.parse(serviceAccountString);
-
-// Firebase को शुरू करना
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com" // आपके प्रोजेक्ट का URL
+  databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com"
 });
-
 const db = admin.database();
-// =======================================================
 
 // Express ऐप बनाना
 const app = express();
-
-// CORS कॉन्फ़िगरेशन
 app.use(cors());
-
-// Middleware का इस्तेमाल करना
 app.use(express.json());
 
 // Razorpay इंस्टैंस बनाना
@@ -37,40 +26,36 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+// --- आपकी प्लान IDs ---
+const ACTIVATION_PLAN_ID = "plan_RIgEghN6aicmgB"; // आपका ₹5 वाला एक्टिवेशन प्लान
+const MAIN_PLAN_ID = "plan_RFqNX97VOfwJwl"; // <<--- यहाँ आपका ₹500 वाला प्लान अपडेट कर दिया गया है
+
 // --- API ENDPOINTS ---
 
-// eMandate (ऑटोपे) बनाने के लिए सही Endpoint (इसमें कोई बदलाव नहीं)
+// eMandate (ऑटोपे) बनाने के लिए Endpoint (यह नहीं बदलेगा)
 app.post('/create-subscription', async (req, res) => {
     try {
-        const plan_id = "plan_RIgEghN6aicmgB";
-
         const subscriptionOptions = {
-            plan_id: plan_id,
+            plan_id: ACTIVATION_PLAN_ID, // सब्सक्रिप्शन हमेशा ₹5 वाले प्लान से शुरू होगा
             total_count: 48,
             quantity: 1,
             customer_notify: 1,
         };
-
         const subscription = await razorpay.subscriptions.create(subscriptionOptions);
-        console.log('Subscription created successfully:', subscription.id);
-
         res.json({
             subscription_id: subscription.id,
             key_id: process.env.RAZORPAY_KEY_ID
         });
-
     } catch (error) {
         console.error('Error creating Razorpay subscription:', error);
         res.status(500).json({ error: 'Something went wrong while creating the subscription.' });
     }
 });
 
-// Webhook सुनने के लिए Endpoint (इसमें Firebase का लॉजिक जोड़ा गया है)
-app.post('/webhook', (req, res) => {
+// Webhook सुनने के लिए Endpoint (अपग्रेड लॉजिक के साथ)
+app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
-
-    console.log('Webhook received...');
     
     try {
         const shasum = crypto.createHmac('sha256', secret);
@@ -78,37 +63,63 @@ app.post('/webhook', (req, res) => {
         const digest = shasum.digest('hex');
 
         if (digest === signature) {
-            console.log('Webhook verified successfully.');
-            
             const event = req.body.event;
             const payload = req.body.payload;
             
             console.log('EVENT RECEIVED:', event);
 
+            // जब ₹5 वाला सब्सक्रिप्शन सफलतापूर्वक एक्टिवेट हो जाए
             if (event === 'subscription.activated') {
-                console.log('SUBSCRIPTION ACTIVATED! Saving to Firebase...');
                 const subscriptionEntity = payload.subscription.entity;
-                
+                const subscriptionId = subscriptionEntity.id;
+
+                console.log(`Subscription ${subscriptionId} has been activated.`);
+
+                // 1. Firebase में शुरुआती डेटा सेव करें
                 const subscriptionData = {
-                    subscriptionId: subscriptionEntity.id,
+                    subscriptionId: subscriptionId,
                     customerId: subscriptionEntity.customer_id,
                     status: subscriptionEntity.status,
                     activatedAt: new Date().toISOString(),
-                    planId: subscriptionEntity.plan_id,
-                    totalCount: subscriptionEntity.total_count,
-                    lastCharged: null
+                    originalPlanId: subscriptionEntity.plan_id,
+                    currentPlanId: subscriptionEntity.plan_id,
+                    isUpgraded: false
                 };
                 
-                const ref = db.ref('active_subscriptions/' + subscriptionEntity.id);
-                ref.set(subscriptionData)
-                    .then(() => console.log('Successfully saved to Firebase:', subscriptionEntity.id))
-                    .catch(err => console.error('Error saving to Firebase:', err));
-            }
+                const ref = db.ref('active_subscriptions/' + subscriptionId);
+                await ref.set(subscriptionData);
+                console.log(`Initial data for ${subscriptionId} saved to Firebase.`);
 
-             if (event === 'payment.captured') {
-                console.log('INITIAL PAYMENT CAPTURED!');
-                console.log('Payment ID:', payload.payment.entity.id);
-                console.log('Amount:', payload.payment.entity.amount / 100, 'INR');
+                // 2. ऑटोमेटिक अपग्रेड का लॉजिक चलाएं
+                if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID) {
+                    console.log(`Upgrading subscription ${subscriptionId} to the main plan...`);
+                    
+                    try {
+                        // सब्सक्रिप्शन को नए प्लान में अपडेट करें
+                        await razorpay.subscriptions.update(subscriptionId, {
+                            plan_id: MAIN_PLAN_ID,
+                            schedule_change_at: 'cycle_end' // यह सुनिश्चित करता है कि बदलाव अगले बिलिंग साइकिल से हो
+                        });
+
+                        console.log(`Successfully scheduled an upgrade for ${subscriptionId} to plan ${MAIN_PLAN_ID}.`);
+
+                        // 3. Firebase में स्टेटस अपडेट करें
+                        await ref.update({
+                            currentPlanId: MAIN_PLAN_ID,
+                            isUpgraded: true,
+                            upgradedAt: new Date().toISOString()
+                        });
+                        console.log('Firebase record updated with upgrade status.');
+
+                    } catch (upgradeError) {
+                        console.error(`Failed to upgrade subscription ${subscriptionId}:`, upgradeError);
+                    }
+                }
+            }
+            
+            // आप चाहें तो दूसरे इवेंट्स (जैसे payment.captured) को भी हैंडल कर सकते हैं
+            if (event === 'payment.captured') {
+                console.log('Payment Captured:', payload.payment.entity.id);
             }
 
             res.json({ status: 'ok' });
@@ -117,42 +128,14 @@ app.post('/webhook', (req, res) => {
             console.warn('Webhook verification failed.');
             res.status(400).json({ error: 'Invalid signature.' });
         }
-    } catch (error)
-    {
+    } catch (error) {
         console.error('Error processing webhook:', error);
         res.status(500).send('Internal Server Error');
     }
 });
 
-// एडमिन पैनल से चार्ज करने के लिए नया एंडपॉइंट
-app.post('/api/charge-addon', async (req, res) => {
-    const { subscription_id, amount } = req.body;
-
-    if (!subscription_id || !amount) {
-        return res.status(400).json({ error: 'Subscription ID and amount are required.' });
-    }
-
-    try {
-        console.log(`Creating add-on for Sub ID: ${subscription_id} with Amount: ${amount}`);
-
-        const addonData = {
-            item: {
-                name: "On-demand Service Charge",
-                amount: amount * 100, // राशि को पैसे में बदलना (₹500 = 50000 पैसे)
-                currency: "INR"
-            }
-        };
-
-        const addon = await razorpay.subscriptions.createAddon(subscription_id, addonData);
-
-        console.log('Add-on created successfully:', addon);
-        res.json({ success: true, addon_id: addon.id, message: 'Add-on created. Will be charged in the next cycle.' });
-
-    } catch (error) {
-        console.error('Error creating add-on:', error.error ? error.error.description : error.message);
-        res.status(500).json({ error: 'Failed to create add-on. ' + (error.error ? error.error.description : 'Please check server logs.') });
-    }
-});
+// `/api/charge-addon` endpoint अब इस फ्लो के लिए ज़रूरी नहीं है,
+// लेकिन आप इसे भविष्य में किसी और काम के लिए रख सकते हैं।
 
 // सर्वर को स्टार्ट करना
 const PORT = process.env.PORT || 10000;
