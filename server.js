@@ -6,82 +6,88 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 require('dotenv').config();
 
-console.log("--- Server process started ---");
-
-// --- स्टेप 1: Environment Variables की जाँच ---
+// --- सुरक्षित शुरुआत ---
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || !process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    console.error("❌ FATAL ERROR: One or more environment variables are MISSING.");
-    console.error("Please check RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, and FIREBASE_SERVICE_ACCOUNT_JSON on Render.");
-    process.exit(1); // सर्वर को यहीं बंद कर दें
+    console.error("FATAL ERROR: Environment variables are missing."); process.exit(1);
 }
-console.log("✅ Step 1/4: All environment variables found.");
 
-// --- स्टेप 2: Firebase को शुरू करना ---
-let db;
+// --- Firebase और Razorpay का सुरक्षित सेटअप ---
+let db, razorpay;
 try {
     const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     const serviceAccount = JSON.parse(serviceAccountString);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com"
-    });
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount), databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com" });
     db = admin.database();
-    console.log("✅ Step 2/4: Firebase Admin SDK initialized successfully.");
+    razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+    console.log("✅ Firebase and Razorpay initialized successfully.");
 } catch (error) {
-    console.error("❌ FATAL ERROR during Firebase initialization:", error.message);
-    process.exit(1);
-}
-
-// --- स्टेप 3: Razorpay को शुरू करना (यह सबसे ज़रूरी जाँच है) ---
-let razorpay;
-try {
-    // हम यहाँ Key ID के आखिरी 4 अक्षर दिखाएंगे ताकि पता चले कि Key लोड हुई है या नहीं
-    const keyIdPreview = process.env.RAZORPAY_KEY_ID.slice(-4);
-    console.log(`Attempting to initialize Razorpay with Key ID ending in: ...${keyIdPreview}`);
-    
-    razorpay = new Razorpay({
-        key_id: process.env.RAZORPAY_KEY_ID,
-        key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-    console.log("✅ Step 3/4: Razorpay instance created successfully.");
-} catch (error) {
-    console.error("❌ FATAL ERROR during Razorpay initialization. This is likely the problem.");
-    console.error("Error Message:", error.message);
-    // हम सर्वर को चालू रखेंगे ताकि आप यह एरर देख सकें
+    console.error("❌ SETUP FAILED:", error.message); process.exit(1);
 }
 
 // Express ऐप बनाना
 const app = express();
 app.use(cors());
 app.use(express.json());
-console.log("✅ Step 4/4: Express app created.");
 
-
-// --- API ENDPOINTS ---
+// --- आपकी प्लान IDs ---
 const ACTIVATION_PLAN_ID = "plan_RIgEghN6aicmgB";
 const MAIN_PLAN_ID = "plan_RFqNX97VOfwJwl";
 
-// (बाकी के फंक्शन्स वैसे ही रहेंगे, उनमें कोई बदलाव नहीं है)
-app.post('/create-subscription', async (req, res) => { /* ... */ });
-app.post('/webhook', async (req, res) => { /* ... */ });
-app.get('/api/fix-my-subscription', async (req, res) => {
-    // पहले जाँच करें कि Razorpay ठीक से शुरू हुआ था या नहीं
-    if (!razorpay) {
-        return res.status(500).send("<h1>Error!</h1><p>Razorpay failed to initialize. Please check the server logs.</p>");
-    }
-    const subscriptionIdToFix = 'sub_RJ8dnXDPrp86ZP';
+// (भविष्य के ग्राहकों के लिए Webhook लॉजिक)
+app.post('/webhook', async (req, res) => { /* ... यह सही है ... */ });
+app.post('/create-subscription', async (req, res) => { /* ... यह सही है ... */ });
+
+// ==============================================================================
+// === स्टेप 1: छुपी हुई Customer ID को ढूंढने के लिए लिंक ===
+// ==============================================================================
+app.get('/api/find-customer-id', async (req, res) => {
+    const subscriptionIdToInspect = 'sub_RJ8dnXDPrp86ZP';
     try {
-        await razorpay.subscriptions.update(subscriptionIdToFix, { plan_id: MAIN_PLAN_ID, schedule_change_at: 'cycle_end' });
-        const ref = db.ref('active_subscriptions/' + subscriptionIdToFix);
-        await ref.set({ subscriptionId: subscriptionIdToFix, status: 'active', originalPlanId: ACTIVATION_PLAN_ID });
-        await ref.update({ currentPlanId: MAIN_PLAN_ID, isUpgraded: true, upgradedAt: new Date().toISOString() });
-        res.send(`<h1>Success!</h1><p>Subscription ${subscriptionIdToFix} has been fixed.</p>`);
+        console.log(`Finding customer ID for subscription: ${subscriptionIdToInspect}`);
+        const subscriptionDetails = await razorpay.subscriptions.fetch(subscriptionIdToInspect);
+        const customerId = subscriptionDetails.customer_id;
+
+        if (customerId) {
+            console.log(`SUCCESS: Found Customer ID: ${customerId}`);
+            res.send(`<h1>Here is your Customer ID:</h1><h2>${customerId}</h2><p>Please copy this ID. You will need it for the next step.</p>`);
+        } else {
+            res.status(404).send("<h1>Error</h1><p>Could not find a Customer ID for this subscription.</p>");
+        }
     } catch (error) {
-        console.error('--- MANUAL FIX FAILED ---');
-        console.error('Full Error Object:', error);
         res.status(500).send(`<h1>Error!</h1><p><b>Details:</b> ${error.error ? error.error.description : error.message}</p>`);
     }
 });
+
+
+// ==============================================================================
+// === स्टेप 2: सब्सक्रिप्शन को ठीक करने के लिए लिंक ===
+// ==============================================================================
+app.get('/api/fix-subscription-with-id/:customerId', async (req, res) => {
+    const customerIdToFix = req.params.customerId;
+    const oldSubscriptionId = 'sub_RJ8dnXDPrp86ZP';
+
+    if (!customerIdToFix || !customerIdToFix.startsWith('cust_')) {
+        return res.status(400).send("<h1>Error!</h1><p>The Customer ID in the link is not valid.</p>");
+    }
+
+    try {
+        console.log(`MANUAL FIX: Starting fix for customer ${customerIdToFix}`);
+        
+        await razorpay.subscriptions.cancel(oldSubscriptionId);
+        console.log(`Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
+
+        const newSubscription = await razorpay.subscriptions.create({
+            plan_id: MAIN_PLAN_ID, customer_id: customerIdToFix, total_count: 48,
+        });
+        console.log(`Step 2/2: Successfully created new ₹500 subscription ${newSubscription.id}`);
+
+        res.send(`<h1>SUCCESS! IT IS FINALLY DONE!</h1><p>A new ₹500 subscription (${newSubscription.id}) has been created. Your problem is solved!</p>`);
+
+    } catch (error) {
+        res.status(500).send(`<h1>Error!</h1><p><b>Details:</b> ${error.error ? error.error.description : error.message}</p>`);
+    }
+});
+
 
 // सर्वर को स्टार्ट करना
 const PORT = process.env.PORT || 10000;
