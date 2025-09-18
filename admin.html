@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shubhzone Admin Panel</title>
     <!-- Firebase SDK Scripts -->
-    <!-- Replace these with your actual Firebase project's SDK snippet -->
+    <!-- ये स्क्रिप्ट्स सीधे CDN से Firebase को लोड करती हैं, जो HTML के लिए सबसे अच्छा तरीका है -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
@@ -161,15 +161,16 @@
 
     <script>
         // --- STEP 1: Firebase Configuration ---
-        // IMPORTANT: Replace this with your project's actual Firebase configuration
+        // आपकी Firebase डिटेल्स यहाँ डाल दी गई हैं
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com", // For Realtime Database
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.appspot.com",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyBHU0S6K2YBPUB_AbNiqmdX9tZ9Cgj32vw",
+            authDomain: "conceptra-c1000.firebaseapp.com",
+            databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com",
+            projectId: "conceptra-c1000",
+            storageBucket: "conceptra-c1000.appspot.com",
+            messagingSenderId: "298402987968",
+            appId: "1:298402987968:web:c0d0d7d6c08cdfa6bc5225",
+            measurementId: "G-QRQYEVSJJ6"
         };
 
         // Initialize Firebase
@@ -266,7 +267,7 @@
 
         async function chargeCustomer(subscriptionId, buttonElement) {
             try {
-                // We will create the '/api/charge-addon' endpoint in server.js next
+                // हम इस '/api/charge-addon' एंडपॉइंट को अगले स्टेप में server.js में बनाएंगे
                 const response = await fetch('/api/charge-addon', {
                     method: 'POST',
                     headers: {
