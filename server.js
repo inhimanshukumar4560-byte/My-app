@@ -6,9 +6,11 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 require('dotenv').config();
 
-// --- सुरक्षित शुरुआत ---
+// --- सुरक्षित शुरुआत: सर्वर शुरू होने पर जाँच ---
+// यह सुनिश्चित करता है कि आपकी सारी Keys Render पर मौजूद हैं
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || !process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    console.error("FATAL ERROR: Environment variables are missing."); process.exit(1);
+    console.error("FATAL ERROR: Environment variables are missing. Please check RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, and FIREBASE_SERVICE_ACCOUNT_JSON on Render.");
+    process.exit(1); // सर्वर को बंद कर दें अगर कोई Key मौजूद नहीं है
 }
 
 // --- Firebase और Razorpay का सुरक्षित सेटअप ---
@@ -16,12 +18,20 @@ let db, razorpay;
 try {
     const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     const serviceAccount = JSON.parse(serviceAccountString);
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount), databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com" });
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com"
+    });
     db = admin.database();
-    razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+    razorpay = new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID,
+        key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
     console.log("✅ Firebase and Razorpay initialized successfully.");
-} catch (error) {
-    console.error("❌ SETUP FAILED:", error.message); process.exit(1);
+} catch (error)
+{
+    console.error("❌ SETUP FAILED:", error.message);
+    process.exit(1);
 }
 
 // Express ऐप बनाना
@@ -30,26 +40,97 @@ app.use(cors());
 app.use(express.json());
 
 // --- आपकी प्लान IDs ---
-const ACTIVATION_PLAN_ID = "plan_RIgEghN6aicmgB";
-const MAIN_PLAN_ID = "plan_RFqNX97VOfwJwl";
+const ACTIVATION_PLAN_ID = "plan_RIgEghN6aicmgB"; // ₹5 वाला प्लान
+const MAIN_PLAN_ID = "plan_RFqNX97VOfwJwl";       // ₹500 वाला प्लान
 
-// (भविष्य के ग्राहकों के लिए कोड, यह अब सही है)
-app.post('/create-subscription', async (req, res) => { /* ... यह सही है ... */ });
-app.post('/webhook', async (req, res) => { /* ... यह सही है ... */ });
+// --- API ENDPOINTS ---
+
+// === भविष्य के ग्राहकों के लिए स्थायी समाधान ===
+app.post('/create-subscription', async (req, res) => {
+    try {
+        // स्टेप 1: हमेशा पहले एक नया कस्टमर बनाएं
+        const customer = await razorpay.customers.create({
+            name: 'Shubhzone User',
+            email: `user_${Date.now()}@shubhzone.shop`,
+            contact: '9999999999'
+        });
+        console.log(`Step 1/2: Created new customer: ${customer.id}`);
+
+        // स्टेप 2: अब उस कस्टमर के लिए सब्सक्रिप्शन बनाएं और उसे customer_id से जोड़ें
+        const subscriptionOptions = {
+            plan_id: ACTIVATION_PLAN_ID,
+            total_count: 48,
+            customer_id: customer.id, // <-- यह है वह लाइन जो सारी समस्याओं को रोकती है
+            customer_notify: 1,
+        };
+        const subscription = await razorpay.subscriptions.create(subscriptionOptions);
+        console.log(`Step 2/2: Created subscription ${subscription.id} AND LINKED it to customer ${customer.id}.`);
+        
+        res.json({
+            subscription_id: subscription.id,
+            key_id: process.env.RAZORPAY_KEY_ID
+        });
+
+    } catch (error) {
+        console.error("Error during /create-subscription:", error);
+        res.status(500).json({ error: 'Failed to create subscription.' });
+    }
+});
+
+
+// === भविष्य के ग्राहकों के लिए Webhook का स्थायी लॉजिक ===
+app.post('/webhook', async (req, res) => {
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const signature = req.headers['x-razorpay-signature'];
+    try {
+        const shasum = crypto.createHmac('sha256', secret);
+        shasum.update(JSON.stringify(req.body));
+        const digest = shasum.digest('hex');
+
+        if (digest === signature) {
+            const event = req.body.event;
+            const payload = req.body.payload;
+            console.log('✅ Webhook Verified. Processing event:', event);
+
+            if (event === 'subscription.activated') {
+                const subscriptionEntity = payload.subscription.entity;
+                const oldSubscriptionId = subscriptionEntity.id;
+                const customerId = subscriptionEntity.customer_id;
+
+                if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID && customerId) {
+                    await razorpay.subscriptions.cancel(oldSubscriptionId);
+                    const newSubscription = await razorpay.subscriptions.create({
+                        plan_id: MAIN_PLAN_ID,
+                        customer_id: customerId,
+                        total_count: 48,
+                    });
+                    console.log(`✅ Upgrade Complete! New ₹500 subscription is ${newSubscription.id}`);
+                }
+            }
+            res.json({ status: 'ok' });
+        } else {
+            console.warn('❌ Webhook verification failed. Please check your secret key.');
+            res.status(400).json({ error: 'Invalid signature.' });
+        }
+    } catch (error) {
+        console.error("❌ Webhook processing error:", error);
+        res.status(500).send('Webhook error.');
+    }
+});
 
 
 // ==============================================================================
 // === स्पेशल वन-टाइम फिक्स (आपके मौजूदा सब्सक्रिप्शन के लिए) ===
 // ==============================================================================
-app.get('/api/fix-my-final-subscription-for-free', async (req, res) => {
+app.get('/api/fix-my-subscription-once-and-for-all', async (req, res) => {
     
     // --- आपकी IDs यहाँ पहले से डाल दी गई हैं ---
-    const oldSubscriptionId = 'sub_RJNRkZmXf5WSFt'; // आपका आखिरी वाला सब्सक्रिप्शन
-    const customerIdToFix   = 'cust_RJNRiV8jWUTsnu';   // उसी की Customer ID
+    const oldSubscriptionId = 'sub_RJNRkZmXf5WSFT';
+    const customerIdToFix   = 'cust_RJNRiv8jWUTsnu';
     // -----------------------------------------
 
     try {
-        console.log(`--- FORCE UPGRADE INITIATED for customer ${customerIdToFix} ---`);
+        console.log(`--- FINAL FIX INITIATED for customer ${customerIdToFix} ---`);
         
         // स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को कैंसिल करें
         await razorpay.subscriptions.cancel(oldSubscriptionId);
@@ -62,23 +143,15 @@ app.get('/api/fix-my-final-subscription-for-free', async (req, res) => {
             total_count: 48,
         });
         console.log(`✅ Step 2/2: Successfully created new ₹500 subscription ${newSubscription.id}`);
-        
-        // Firebase में भी रिकॉर्ड बना दें
-        const ref = db.ref('active_subscriptions/' + newSubscription.id);
-        await ref.set({
-            subscriptionId: newSubscription.id, customerId: customerIdToFix, status: 'active',
-            planId: MAIN_PLAN_ID, createdAt: new Date().toISOString()
-        });
-        console.log("✅ Firebase record created for the new subscription.");
 
-
-        res.send(`<h1>SUCCESS! IT IS FINALLY, TRULY DONE!</h1><p>The old subscription was cancelled and a new ₹500 subscription (${newSubscription.id}) has been created. No new payment was needed. I am truly sorry for all the trouble this has caused.</p>`);
+        res.send(`<h1>SUCCESS. IT IS DONE.</h1><p>The old subscription was cancelled and a new ₹500 subscription (${newSubscription.id}) has been created. No new payment was needed. I am truly sorry for all the trouble this has caused.</p>`);
 
     } catch (error) {
-        console.error('--- FORCE UPGRADE FAILED ---', error);
+        console.error('--- FINAL FIX FAILED ---', error);
         res.status(500).send(`<h1>Error!</h1><p><b>Details:</b> ${error.error ? error.error.description : error.message}</p>`);
     }
 });
+
 
 // सर्वर को स्टार्ट करना
 const PORT = process.env.PORT || 10000;
