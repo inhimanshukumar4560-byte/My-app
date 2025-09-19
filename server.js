@@ -34,43 +34,17 @@ try {
 const app = express();
 app.use(cors());
 
-// =========================================================================
-// ==================== यही है असली और फाइनल बदलाव =======================
-// =========================================================================
-// हम सर्वर को बता रहे हैं कि बाकी सब रास्तों के लिए JSON इस्तेमाल करो...
-app.use(express.json());
-// ...लेकिन '/webhook' वाले रास्ते के लिए डेटा को हूबहू वैसा ही रहने दो, उसे बदलो मत।
-// यह लाइन Razorpay के सिग्नेचर को सही से वेरिफाई करने के लिए ज़रूरी है।
-app.use('/webhook', express.raw({ type: 'application/json' }));
-// =========================================================================
-
-
 // आपकी दोनों TEST PLAN IDs
 const ACTIVATION_PLAN_ID = 'plan_RJX1Aq0y6jBERy'; 
 const MAIN_PLAN_ID = 'plan_RJY2rfogWKazn1';
 
-// === सब्सक्रिप्शन बनाना ===
-app.post('/create-subscription', async (req, res) => {
-    try {
-        console.log("Creating subscription with Test Plan ID:", ACTIVATION_PLAN_ID);
-        const subscription = await razorpay.subscriptions.create({
-            plan_id: ACTIVATION_PLAN_ID,
-            total_count: 48,
-            customer_notify: 1,
-        });
-        console.log("✅ Subscription created successfully:", subscription.id);
-        res.json({
-            subscription_id: subscription.id,
-            key_id: process.env.RAZORPAY_KEY_ID
-        });
-    } catch (error) {
-        console.error("❌ Error creating subscription:", error);
-        res.status(500).json({ error: 'Failed to create subscription.' });
-    }
-});
-
-// === WEBHOOK का 100% सही और फाइनल लॉजिक ===
-app.post('/webhook', async (req, res) => {
+// ======================================================================================
+// ==================== यही है असली और फाइनल बदलाव (The Real Fix) =======================
+// ======================================================================================
+// हम सर्वर को बता रहे हैं कि पहले '/webhook' वाले रास्ते को देखो और उसके डेटा को मत बदलो।
+// यह लाइन Razorpay के सिग्नेचर को सही से वेरिफाई करने के लिए सबसे ज़रूरी है।
+// ======================================================================================
+app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
     
@@ -78,8 +52,8 @@ app.post('/webhook', async (req, res) => {
 
     try {
         const shasum = crypto.createHmac('sha256', secret);
-        // अब हम req.body की जगह req.toString() का इस्तेमाल करेंगे
-        shasum.update(req.body.toString()); 
+        // अब हम req.body का इस्तेमाल करेंगे, जो कि एक Raw Buffer है
+        shasum.update(req.body); 
         const digest = shasum.digest('hex');
 
         if (digest !== signature) {
@@ -144,6 +118,31 @@ app.post('/webhook', async (req, res) => {
         res.status(500).send('Webhook error.');
     }
 });
+
+
+// अब हम सर्वर को बता रहे हैं कि बाकी सब रास्तों के लिए JSON इस्तेमाल करो
+app.use(express.json());
+
+// === सब्सक्रिप्शन बनाना ===
+app.post('/create-subscription', async (req, res) => {
+    try {
+        console.log("Creating subscription with Test Plan ID:", ACTIVATION_PLAN_ID);
+        const subscription = await razorpay.subscriptions.create({
+            plan_id: ACTIVATION_PLAN_ID,
+            total_count: 48,
+            customer_notify: 1,
+        });
+        console.log("✅ Subscription created successfully:", subscription.id);
+        res.json({
+            subscription_id: subscription.id,
+            key_id: process.env.RAZORPAY_KEY_ID
+        });
+    } catch (error) {
+        console.error("❌ Error creating subscription:", error);
+        res.status(500).json({ error: 'Failed to create subscription.' });
+    }
+});
+
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
