@@ -35,7 +35,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const ACTIVATION_PLAN_ID = 'plan_RIgEjuqVIyUaRa';
+// ===================================================================
+// =========== सिर्फ यह एक लाइन बदली गई है (सबसे ज़रूरी) ============
+// ===================================================================
+const ACTIVATION_PLAN_ID = 'plan_RJX1Aq0y6jBERy'; // आपकी नई Test Mode वाली Plan ID
+// ===================================================================
+
 const MAIN_PLAN_ID = 'plan_RFqNX97VOfwJwl';
 
 // === सब्सक्रिप्शन बनाना ===
@@ -52,6 +57,8 @@ app.post('/create-subscription', async (req, res) => {
             key_id: process.env.RAZORPAY_KEY_ID
         });
     } catch (error) {
+        // सर्वर को ज़्यादा जानकारी देने के लिए console.error जोड़ें
+        console.error("❌ Error creating subscription:", error);
         res.status(500).json({ error: 'Failed to create subscription.' });
     }
 });
