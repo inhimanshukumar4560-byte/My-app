@@ -40,7 +40,7 @@ app.use(express.json());
 // ==================== आपकी दोनों TEST PLAN IDs यहाँ हैं ==================
 // ===================================================================
 const ACTIVATION_PLAN_ID = 'plan_RJX1Aq0y6jBERy'; // आपकी ₹5 वाली Test Plan ID
-const MAIN_PLAN_ID = 'plan_RJY2rfogWKazn1';       // आपकी ₹500 वाली Test Plan ID (यह लाइन बदली गई है)
+const MAIN_PLAN_ID = 'plan_RJY2rfogWKazn1';       // आपकी ₹500 वाली Test Plan ID
 // ===================================================================
 
 
@@ -68,6 +68,13 @@ app.post('/create-subscription', async (req, res) => {
 app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
+    
+    // =============================================================
+    // =========== यह लाइन हमें अपराधी को रंगे हाथों पकड़वाएगी ==========
+    // =============================================================
+    console.log('[DEBUG] Secret key being used by the server is:', secret);
+    // =============================================================
+
     try {
         const shasum = crypto.createHmac('sha256', secret);
         shasum.update(JSON.stringify(req.body));
@@ -98,15 +105,13 @@ app.post('/webhook', async (req, res) => {
                         await razorpay.subscriptions.cancel(oldSubscriptionId);
                         console.log(`Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
                         
-                        // --- यही है वह जादुई बदलाव ---
-                        // अभी से ठीक 1 घंटे बाद का समय निकालना (3600 सेकंड)
                         const startTimeInFuture = Math.floor(Date.now() / 1000) + 3600;
 
                         const newSubscription = await razorpay.subscriptions.create({
                             plan_id: MAIN_PLAN_ID,
                             customer_id: customerId,
                             total_count: 48,
-                            start_at: startTimeInFuture // सब्सक्रिप्शन को 1 घंटे बाद शुरू करने का निर्देश
+                            start_at: startTimeInFuture
                         });
 
                         console.log(`✅ Upgrade Complete! New ₹500 subscription ${newSubscription.id} is scheduled to start in 1 hour.`);
@@ -115,7 +120,7 @@ app.post('/webhook', async (req, res) => {
                         await ref.set({
                             subscriptionId: newSubscription.id,
                             customerId: customerId,
-                            status: 'scheduled', // इसका स्टेटस अभी 'scheduled' होगा, 'active' नहीं
+                            status: 'scheduled',
                             planId: MAIN_PLAN_ID,
                             createdAt: new Date().toISOString(),
                             startsAt: new Date(startTimeInFuture * 1000).toISOString()
