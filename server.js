@@ -6,9 +6,10 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 require('dotenv').config();
 
-// --- सुरक्षित शुरुआत ---
+// --- सुरक्षित शुरुआत: सर्वर शुरू होने पर जाँच ---
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || !process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    console.error("FATAL ERROR: Environment variables are missing."); process.exit(1);
+    console.error("FATAL ERROR: Environment variables are missing. Please check RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, and FIREBASE_SERVICE_ACCOUNT_JSON on Render.");
+    process.exit(1);
 }
 
 // --- Firebase और Razorpay का सुरक्षित सेटअप ---
@@ -16,12 +17,20 @@ let db, razorpay;
 try {
     const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
     const serviceAccount = JSON.parse(serviceAccountString);
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount), databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com" });
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com"
+    });
     db = admin.database();
-    razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+    razorpay = new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID,
+        key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
     console.log("✅ Firebase and Razorpay initialized successfully.");
-} catch (error) {
-    console.error("❌ SETUP FAILED:", error.message); process.exit(1);
+} catch (error)
+{
+    console.error("❌ SETUP FAILED:", error.message);
+    process.exit(1);
 }
 
 // Express ऐप बनाना
@@ -36,12 +45,13 @@ const MAIN_PLAN_ID = 'plan_RFqNX97VOfwJwl';       // यह ₹500 वाला 
 // --- API ENDPOINTS ---
 
 // === सब्सक्रिप्शन बनाने का सबसे सरल और भरोसेमंद तरीका ===
+// यह ठीक आपके पुराने js की तरह काम करेगा ताकि पेमेंट फेल न हो
 app.post('/create-subscription', async (req, res) => {
     try {
         console.log("Creating a simple subscription to ensure payment success...");
         
         const subscriptionOptions = {
-            plan_id: ACTIVATION_PLAN_ID,
+            plan_id: ACTIVATION_PLAN_ID, // सिर्फ़ प्लान ID से सब्सक्रिप्शन बनाना
             total_count: 48,
             customer_notify: 1,
         };
@@ -61,7 +71,8 @@ app.post('/create-subscription', async (req, res) => {
 });
 
 
-// === Webhook का फाइनल और सही किया हुआ लॉजिक (अपग्रेड का उपयोग करके) ===
+// === Webhook का फाइनल लॉजिक (पर्दे के पीछे का जादू) ===
+// यह फंक्शन पेमेंट के बाद आराम से अपना काम करेगा
 app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
@@ -77,40 +88,36 @@ app.post('/webhook', async (req, res) => {
 
             if (event === 'subscription.activated') {
                 const subscriptionEntity = payload.subscription.entity;
-                const subscriptionId = subscriptionEntity.id;
+                const oldSubscriptionId = subscriptionEntity.id;
+                const customerId = subscriptionEntity.customer_id;
 
-                // --- यह है सही और स्थायी तरीका ---
-                if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID) {
-                    console.log(`🚀 Initiating upgrade for subscription: ${subscriptionId}`);
+                // यह लॉजिक सिर्फ़ तभी चलेगा जब सब्सक्रिप्शन ₹5 वाले प्लान का हो और उसका कोई ग्राहक हो
+                // (Razorpay पेमेंट के बाद Customer ID अपने आप बना देता है)
+                if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID && customerId) {
+                    console.log(`Payment successful for ${oldSubscriptionId}. Now starting background upgrade for customer ${customerId}...`);
                     
-                    // मौजूदा सब्सक्रिप्शन को नए प्लान में अपग्रेड करें
-                    await razorpay.subscriptions.update(subscriptionId, {
+                    // स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को कैंसिल करें
+                    await razorpay.subscriptions.cancel(oldSubscriptionId);
+                    console.log(`Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
+                    
+                    // स्टेप 2: उसी ग्राहक के लिए ₹500 का नया सब्सक्रिप्शन बनाएं
+                    const newSubscription = await razorpay.subscriptions.create({
                         plan_id: MAIN_PLAN_ID,
-                        // यह सुनिश्चित करता है कि बदलाव अगले बिलिंग साइकिल से हो
-                        schedule_change_at: 'cycle_end' 
+                        customer_id: customerId,
+                        total_count: 48,
                     });
-
-                    console.log(`✅ Upgrade Scheduled! Subscription ${subscriptionId} will be charged ₹500 from the next cycle.`);
+                    console.log(`✅ Upgrade Complete! New ₹500 subscription is ${newSubscription.id}`);
                     
-                    // Firebase में रिकॉर्ड को अपडेट करें
-                    const ref = db.ref('active_subscriptions/' + subscriptionId);
-                    // पहले यह सुनिश्चित करें कि रिकॉर्ड है, अगर नहीं है तो बना दें
-                    const customerId = subscriptionEntity.customer_id;
-                    if (customerId) {
-                       await ref.set({
-                           subscriptionId: subscriptionId,
-                           customerId: customerId,
-                           status: 'active',
-                           originalPlanId: ACTIVATION_PLAN_ID,
-                       });
-                    }
-                    // अब उसे अपग्रेड स्टेटस के साथ अपडेट करें
-                    await ref.update({
-                        currentPlanId: MAIN_PLAN_ID,
-                        isUpgraded: true,
-                        upgradedAt: new Date().toISOString()
+                    // Firebase में नए वाले सब्सक्रिप्शन का रिकॉर्ड बना दें
+                    const ref = db.ref('active_subscriptions/' + newSubscription.id);
+                    await ref.set({
+                        subscriptionId: newSubscription.id,
+                        customerId: customerId,
+                        status: 'active',
+                        planId: MAIN_PLAN_ID,
+                        createdAt: new Date().toISOString()
                     });
-                    console.log("✅ Firebase record updated with upgrade status.");
+                    console.log("✅ Firebase record created for the new subscription.");
                 }
             }
             res.json({ status: 'ok' });
@@ -119,11 +126,8 @@ app.post('/webhook', async (req, res) => {
             res.status(400).json({ error: 'Invalid signature.' });
         }
     } catch (error) {
-        // --- एक बहुत ज़रूरी बदलाव ---
-        // अगर अपग्रेड फेल होता है (जैसे UPI की वजह से), तो हम उसे logs में देखेंगे
         console.error("❌ Webhook processing error:", error);
-        // Razorpay को यह बताना ज़रूरी है कि कुछ गलत हुआ है, इसलिए 500 भेजें
-        res.status(500).send({ status: 'error', message: error.message });
+        res.status(500).send('Webhook error.');
     }
 });
 
