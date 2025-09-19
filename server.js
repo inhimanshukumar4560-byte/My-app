@@ -39,13 +39,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- आपकी प्लान IDs ---
-const ACTIVATION_PLAN_ID = "plan_RIgEghN6aicmgB"; // ₹5 वाला प्लान
+// --- आपकी प्लान IDs (नई Plan ID के साथ अपडेटेड) ---
+const ACTIVATION_PLAN_ID = "plan_RJTkhdu5HZemLI"; // <-- यहाँ आपकी नई Plan ID डाल दी गई है
 const MAIN_PLAN_ID = "plan_RFqNX97VOfwJwl";       // ₹500 वाला प्लान
 
 // --- API ENDPOINTS ---
 
-// === भविष्य के ग्राहकों के लिए स्थायी समाधान (अपडेट किया गया) ===
+// === भविष्य के ग्राहकों के लिए स्थायी समाधान ===
 app.post('/create-subscription', async (req, res) => {
     try {
         // स्टेप 1: हमेशा पहले एक नया कस्टमर बनाएं
@@ -63,15 +63,12 @@ app.post('/create-subscription', async (req, res) => {
             customer_id: customer.id,
             customer_notify: 1,
             
-            // ====================== पहला और सबसे ज़रूरी बदलाव ======================
-            // यह Razorpay को बताएगा कि ग्राहक से ₹500 तक की Autopay लिमिट की मंजूरी लेनी है,
-            // भले ही पहला पेमेंट सिर्फ ₹5 का हो।
+            // यह Razorpay को बताएगा कि ग्राहक से ₹500 तक की Autopay लिमिट की मंजूरी लेनी है
             subscription_registration: {
                 method: 'upi',
                 auth_type: 'initial',
                 max_amount: 50000 // 500 रुपये (500 * 100 पैसे)
             }
-            // ======================================================================
         };
         const subscription = await razorpay.subscriptions.create(subscriptionOptions);
         console.log(`Step 2/2: Created subscription ${subscription.id} with a ₹500 mandate limit.`);
@@ -88,7 +85,7 @@ app.post('/create-subscription', async (req, res) => {
 });
 
 
-// === भविष्य के ग्राहकों के लिए Webhook का स्थायी लॉजिक (अपडेट किया गया) ===
+// === भविष्य के ग्राहकों के लिए Webhook का स्थायी लॉजिक ===
 app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
@@ -109,9 +106,6 @@ app.post('/webhook', async (req, res) => {
 
                 if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID && customerId) {
                     
-                    // ====================== दूसरा और अंतिम बदलाव ======================
-                    // यह अब सब्सक्रिप्शन को अपग्रेड करेगा और पहले महीने का ₹500 तुरंत चार्ज करेगा।
-
                     // --- स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को तुरंत कैंसिल करें ---
                     await razorpay.subscriptions.cancel(oldSubscriptionId);
                     console.log(`✅ Step 1/3: Cancelled old activation subscription ${oldSubscriptionId}.`);
@@ -134,7 +128,6 @@ app.post('/webhook', async (req, res) => {
                         quantity: 1
                     });
                     console.log(`✅ Step 3/3: Created an immediate ₹500 add-on charge.`);
-                    // ======================================================================
                 }
             }
             res.json({ status: 'ok' });
@@ -151,7 +144,6 @@ app.post('/webhook', async (req, res) => {
 
 // ==============================================================================
 // === स्पेशल वन-टाइम फिक्स (आपके मौजूदा सब्सक्रिप्शन के लिए) ===
-// यह कोड वैसा ही है जैसा था, ताकि आप किसी पुराने अटके हुए ग्राहक को ठीक कर सकें।
 // ==============================================================================
 app.get('/api/fix-my-subscription-once-and-for-all', async (req, res) => {
     
