@@ -38,51 +38,14 @@ app.use(cors());
 const ACTIVATION_PLAN_ID = 'plan_RJX1Aq0y6jBERy'; 
 const MAIN_PLAN_ID = 'plan_RJY2rfogWKazn1';
 
-// =========================================================================
-// ==================== सब्सक्रिप्शन बनाने का नया और Foolproof तरीका =================
-// =========================================================================
-app.post('/create-subscription', async (req, res) => {
-    try {
-        // स्टेप 1: सबसे पहले एक नया Customer बनाएँ
-        console.log("Creating a new customer on Razorpay...");
-        const customer = await razorpay.customers.create({
-            name: 'Shubhzone User', // आप चाहें तो इसे फ्रंटएंड से भी भेज सकते हैं
-            email: `user_${Date.now()}@shubhzone.shop` // हर बार एक यूनिक ईमेल
-        });
-        console.log(`✅ Customer created successfully: ${customer.id}`);
-
-        // स्टेप 2: अब उस Customer ID का इस्तेमाल करके सब्सक्रिप्शन बनाएँ
-        console.log(`Creating subscription for customer ${customer.id}...`);
-        const subscription = await razorpay.subscriptions.create({
-            plan_id: ACTIVATION_PLAN_ID,
-            customer_id: customer.id, // हम खुद Customer ID दे रहे हैं
-            total_count: 48,
-            customer_notify: 1,
-        });
-        console.log("✅ Subscription created successfully:", subscription.id);
-        
-        res.json({
-            subscription_id: subscription.id,
-            key_id: process.env.RAZORPAY_KEY_ID
-        });
-
-    } catch (error) {
-        console.error("❌ Error during proactive subscription creation:", error);
-        res.status(500).json({ error: 'Failed to create subscription.' });
-    }
-});
-
-
-// WEBHOOK का रास्ता, अब यह 100% काम करेगा
-app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-    // ... (बाकी का वेबहुक वाला कोड हूबहू वैसा ही रहेगा जैसा पिछले सही वाले कोड में था)
-    // ... (अब हमें पता है कि सिग्नेचर वेरिफिकेशन की समस्या Render की वजह से है, इसलिए हम उसे छोड़ सकते हैं)
+// WEBHOOK का रास्ता (असुरक्षित मोड में, सिर्फ टेस्टिंग के लिए)
+app.post('/webhook', express.json(), async (req, res) => {
     
     console.log("--- [चेतावनी: असुरक्षित मोड] ---");
     console.log("वेबहुक मिला। सिग्नेचर की जाँच नहीं की जा रही है।");
 
     try {
-        const body = JSON.parse(req.body.toString());
+        const body = req.body;
         console.log('वेबहुक का इवेंट:', body.event);
         
         if (body.event === 'payment.captured') {
@@ -105,25 +68,23 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
                         await razorpay.subscriptions.cancel(oldSubscriptionId);
                         console.log(`Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
                         
-                        const startTimeInFuture = Math.floor(Date.now() / 1000) + 3600;
-
+                        // --- यही है वह बदलाव ---
+                        // अब हम कोई start_at नहीं देंगे, सब्सक्रिप्शन तुरंत शुरू होगा
                         const newSubscription = await razorpay.subscriptions.create({
                             plan_id: MAIN_PLAN_ID,
                             customer_id: customerId,
                             total_count: 48,
-                            start_at: startTimeInFuture 
                         });
 
-                        console.log(`✅✅✅ VICTORY! Upgrade Complete! New ₹500 subscription ${newSubscription.id} is scheduled.`);
+                        console.log(`✅✅✅ VICTORY! Upgrade Complete! New ₹500 subscription ${newSubscription.id} is now ACTIVE.`);
                         
                         const ref = db.ref('active_subscriptions/' + newSubscription.id);
                         await ref.set({
                             subscriptionId: newSubscription.id,
                             customerId: customerId,
-                            status: 'scheduled',
+                            status: 'active', // अब स्टेटस सीधे 'active' होगा
                             planId: MAIN_PLAN_ID,
-                            createdAt: new Date().toISOString(),
-                            startsAt: new Date(startTimeInFuture * 1000).toISOString()
+                            createdAt: new Date().toISOString()
                         });
                         console.log("✅✅✅ Firebase record created.");
                     }
@@ -139,11 +100,37 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
     }
 });
 
+// सब्सक्रिप्शन बनाने का Foolproof तरीका
+app.post('/create-subscription', express.json(), async (req, res) => {
+    try {
+        console.log("Creating a new customer on Razorpay...");
+        const customer = await razorpay.customers.create({
+            name: 'Shubhzone User',
+            email: `user_${Date.now()}@shubhzone.shop`
+        });
+        console.log(`✅ Customer created successfully: ${customer.id}`);
 
-// बाकी रास्तों के लिए JSON Parser
-app.use(express.json());
+        console.log(`Creating subscription for customer ${customer.id}...`);
+        const subscription = await razorpay.subscriptions.create({
+            plan_id: ACTIVATION_PLAN_ID,
+            customer_id: customer.id,
+            total_count: 48,
+            customer_notify: 1,
+        });
+        console.log("✅ Subscription created successfully:", subscription.id);
+        
+        res.json({
+            subscription_id: subscription.id,
+            key_id: process.env.RAZORPAY_KEY_ID
+        });
+
+    } catch (error) {
+        console.error("❌ Error during proactive subscription creation:", error);
+        res.status(500).json({ error: 'Failed to create subscription.' });
+    }
+});
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`🚀 सर्वर पोर्ट ${PORT} पर लाइव है (प्रोएक्टिव मोड में)।`);
+    console.log(`🚀 सर्वर पोर्ट ${PORT} पर लाइव है (फाइनल टेस्टिंग मोड में)।`);
 });
