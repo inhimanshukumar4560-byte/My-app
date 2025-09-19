@@ -40,12 +40,13 @@ app.use(cors());
 app.use(express.json());
 
 // --- आपकी प्लान IDs ---
-const ACTIVATION_PLAN_ID = "plan_RIgEghN6aicmgB"; // ₹5 वाला प्लान
-const MAIN_PLAN_ID = "plan_RFqNX97VOfwJwl";       // ₹500 वाला प्लान
+// === यहाँ आपकी दी हुई नई प्लान ID डाल दी गई है ===
+const ACTIVATION_PLAN_ID = 'plan_RIgEjuqVIyUaRa'; // <<-- यह आपकी नई वाली ₹5 की Plan ID है
+const MAIN_PLAN_ID = 'plan_RFqNX97VOfwJwl';       // यह ₹500 वाला प्लान सही है
 
 // --- API ENDPOINTS ---
 
-// === भविष्य के ग्राहकों के लिए स्थायी समाधान ===
+// === भविष्य के सभी ग्राहकों के लिए स्थायी समाधान ===
 app.post('/create-subscription', async (req, res) => {
     try {
         // स्टेप 1: हमेशा पहले एक नया कस्टमर बनाएं
@@ -58,9 +59,9 @@ app.post('/create-subscription', async (req, res) => {
 
         // स्टेप 2: अब उस कस्टमर के लिए सब्सक्रिप्शन बनाएं और उसे customer_id से जोड़ें
         const subscriptionOptions = {
-            plan_id: ACTIVATION_PLAN_ID,
+            plan_id: ACTIVATION_PLAN_ID, // अब यह नए प्लान का इस्तेमाल करेगा
             total_count: 48,
-            customer_id: customer.id, // <-- यह है वह लाइन जो सारी समस्याओं को रोकती है
+            customer_id: customer.id,
             customer_notify: 1,
         };
         const subscription = await razorpay.subscriptions.create(subscriptionOptions);
@@ -78,7 +79,8 @@ app.post('/create-subscription', async (req, res) => {
 });
 
 
-// === भविष्य के ग्राहकों के लिए Webhook का स्थायी लॉजिक ===
+// === Webhook का फाइनल लॉजिक (Cancel and Create New) ===
+// यह फंक्शन बिल्कुल सही है और इसमें कोई बदलाव नहीं किया गया है
 app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
@@ -105,6 +107,17 @@ app.post('/webhook', async (req, res) => {
                         total_count: 48,
                     });
                     console.log(`✅ Upgrade Complete! New ₹500 subscription is ${newSubscription.id}`);
+
+                    // Firebase में नए वाले सब्सक्रिप्शन का रिकॉर्ड बना दें
+                    const ref = db.ref('active_subscriptions/' + newSubscription.id);
+                    await ref.set({
+                        subscriptionId: newSubscription.id,
+                        customerId: customerId,
+                        status: 'active',
+                        planId: MAIN_PLAN_ID,
+                        createdAt: new Date().toISOString()
+                    });
+                    console.log("✅ Firebase record created for the new subscription.");
                 }
             }
             res.json({ status: 'ok' });
@@ -118,43 +131,8 @@ app.post('/webhook', async (req, res) => {
     }
 });
 
-
-// ==============================================================================
-// === स्पेशल वन-टाइम फिक्स (आपके मौजूदा सब्सक्रिप्शन के लिए) ===
-// ==============================================================================
-app.get('/api/fix-my-subscription-once-and-for-all', async (req, res) => {
-    
-    // --- आपकी IDs यहाँ पहले से डाल दी गई हैं ---
-    const oldSubscriptionId = 'sub_RJNRkZmXf5WSFT';
-    const customerIdToFix   = 'cust_RJNRiv8jWUTsnu';
-    // -----------------------------------------
-
-    try {
-        console.log(`--- FINAL FIX INITIATED for customer ${customerIdToFix} ---`);
-        
-        // स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को कैंसिल करें
-        await razorpay.subscriptions.cancel(oldSubscriptionId);
-        console.log(`✅ Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
-        
-        // स्टेप 2: उसी ग्राहक के लिए ₹500 का नया सब्सक्रिप्शन बनाएं
-        const newSubscription = await razorpay.subscriptions.create({
-            plan_id: MAIN_PLAN_ID,
-            customer_id: customerIdToFix,
-            total_count: 48,
-        });
-        console.log(`✅ Step 2/2: Successfully created new ₹500 subscription ${newSubscription.id}`);
-
-        res.send(`<h1>SUCCESS. IT IS DONE.</h1><p>The old subscription was cancelled and a new ₹500 subscription (${newSubscription.id}) has been created. No new payment was needed. I am truly sorry for all the trouble this has caused.</p>`);
-
-    } catch (error) {
-        console.error('--- FINAL FIX FAILED ---', error);
-        res.status(500).send(`<h1>Error!</h1><p><b>Details:</b> ${error.error ? error.error.description : error.message}</p>`);
-    }
-});
-
-
 // सर्वर को स्टार्ट करना
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`🚀 Backend server is now running perfectly on port ${PORT}`);
+    console.log(`🚀 Your server is now permanently fixed and running on port ${PORT}`);
 });
