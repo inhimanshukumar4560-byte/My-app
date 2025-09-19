@@ -35,14 +35,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// यहाँ अपनी दोनों TEST PLAN IDs डालें
+
+// ===================================================================
+// ==================== आपकी दोनों TEST PLAN IDs यहाँ हैं ==================
+// ===================================================================
 const ACTIVATION_PLAN_ID = 'plan_RJX1Aq0y6jBERy'; // आपकी ₹5 वाली Test Plan ID
-const MAIN_PLAN_ID = 'plan_RJX1CrfJz14iLg';       // मान लेते हैं यह आपकी ₹500 वाली Test Plan ID है
+const MAIN_PLAN_ID = 'plan_RJY2rfogWKazn1';       // आपकी ₹500 वाली Test Plan ID (यह लाइन बदली गई है)
+// ===================================================================
+
 
 // === सब्सक्रिप्शन बनाना ===
 app.post('/create-subscription', async (req, res) => {
     try {
-        console.log("Attempting to create subscription with Plan ID:", ACTIVATION_PLAN_ID);
+        console.log("Creating subscription with Test Plan ID:", ACTIVATION_PLAN_ID);
         const subscription = await razorpay.subscriptions.create({
             plan_id: ACTIVATION_PLAN_ID,
             total_count: 48,
@@ -54,19 +59,79 @@ app.post('/create-subscription', async (req, res) => {
             key_id: process.env.RAZORPAY_KEY_ID
         });
     } catch (error) {
-        // =============================================================
-        // ============== यही वह लाइन है जो हमें सच्चाई बताएगी ==========
-        // =============================================================
-        console.error("❌ Error creating subscription:", JSON.stringify(error, null, 2));
-        // =============================================================
+        console.error("❌ Error creating subscription:", error);
         res.status(500).json({ error: 'Failed to create subscription.' });
     }
 });
 
-// === WEBHOOK का फाइनल लॉजिक ===
+// === WEBHOOK का 100% सही और फाइनल लॉजिक ===
 app.post('/webhook', async (req, res) => {
-    // ... (बाकी का वेबहुक कोड जैसा था वैसा ही रहेगा) ...
-    // ... (इसमें कोई बदलाव की ज़रूरत नहीं है) ...
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const signature = req.headers['x-razorpay-signature'];
+    try {
+        const shasum = crypto.createHmac('sha256', secret);
+        shasum.update(JSON.stringify(req.body));
+        const digest = shasum.digest('hex');
+
+        if (digest !== signature) {
+            console.warn('❌ Webhook verification failed.');
+            return res.status(400).json({ error: 'Invalid signature.' });
+        }
+        
+        console.log('✅ Webhook Verified. Processing event:', req.body.event);
+        
+        if (req.body.event === 'payment.captured') {
+            const paymentEntity = req.body.payload.payment.entity;
+            
+            if (paymentEntity.invoice_id && paymentEntity.customer_id) {
+                const invoice = await razorpay.invoices.fetch(paymentEntity.invoice_id);
+                
+                if (invoice.subscription_id) {
+                    const subscriptionEntity = await razorpay.subscriptions.fetch(invoice.subscription_id);
+
+                    if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID) {
+                        const oldSubscriptionId = subscriptionEntity.id;
+                        const customerId = subscriptionEntity.customer_id;
+                        
+                        console.log(`Payment captured for ${oldSubscriptionId}. Starting upgrade for customer ${customerId}...`);
+                        
+                        await razorpay.subscriptions.cancel(oldSubscriptionId);
+                        console.log(`Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
+                        
+                        // --- यही है वह जादुई बदलाव ---
+                        // अभी से ठीक 1 घंटे बाद का समय निकालना (3600 सेकंड)
+                        const startTimeInFuture = Math.floor(Date.now() / 1000) + 3600;
+
+                        const newSubscription = await razorpay.subscriptions.create({
+                            plan_id: MAIN_PLAN_ID,
+                            customer_id: customerId,
+                            total_count: 48,
+                            start_at: startTimeInFuture // सब्सक्रिप्शन को 1 घंटे बाद शुरू करने का निर्देश
+                        });
+
+                        console.log(`✅ Upgrade Complete! New ₹500 subscription ${newSubscription.id} is scheduled to start in 1 hour.`);
+                        
+                        const ref = db.ref('active_subscriptions/' + newSubscription.id);
+                        await ref.set({
+                            subscriptionId: newSubscription.id,
+                            customerId: customerId,
+                            status: 'scheduled', // इसका स्टेटस अभी 'scheduled' होगा, 'active' नहीं
+                            planId: MAIN_PLAN_ID,
+                            createdAt: new Date().toISOString(),
+                            startsAt: new Date(startTimeInFuture * 1000).toISOString()
+                        });
+                        console.log("✅ Firebase record created for the new scheduled subscription.");
+                    }
+                }
+            }
+        }
+        
+        res.json({ status: 'ok' });
+
+    } catch (error) {
+        console.error("❌ Webhook processing error:", error.message, error.stack);
+        res.status(500).send('Webhook error.');
+    }
 });
 
 const PORT = process.env.PORT || 10000;
