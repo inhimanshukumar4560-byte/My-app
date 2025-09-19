@@ -52,7 +52,7 @@ app.post('/create-subscription', async (req, res) => {
         console.log("Creating a simple subscription to ensure payment success...");
         
         const subscriptionOptions = {
-            plan_id: ACTIVATION_PLAN_ID, // सिर्फ़ प्लान ID से सब्सक्रिप्शन बनाना
+            plan_id: ACTIVATION_PLAN_ID, // सिर्फ़ प्लान ID से सब्सक्रिप्शन बनाना, कोई Customer नहीं
             total_count: 48,
             customer_notify: 1,
         };
@@ -93,6 +93,7 @@ app.post('/webhook', async (req, res) => {
                 const customerId = subscriptionEntity.customer_id;
 
                 // यह लॉजिक सिर्फ़ तभी चलेगा जब सब्सक्रिप्शन ₹5 वाले प्लान का हो और उसका कोई ग्राहक हो
+                // (Razorpay पेमेंट के बाद Customer ID अपने आप बना देता है)
                 if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID && customerId) {
                     console.log(`Payment successful for ${oldSubscriptionId}. Now starting background upgrade for customer ${customerId}...`);
                     
