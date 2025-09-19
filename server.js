@@ -53,7 +53,7 @@ app.post('/create-subscription', async (req, res) => {
         
         const subscriptionOptions = {
             plan_id: ACTIVATION_PLAN_ID, // सिर्फ़ प्लान ID से सब्सक्रिप्शन बनाना
-            total_count: 48,
+            total_count: 48, // यह वैल्यू यहाँ ज़रूरी नहीं है, पर रख सकते हैं
             customer_notify: 1,
         };
         const subscription = await razorpay.subscriptions.create(subscriptionOptions);
@@ -89,35 +89,47 @@ app.post('/webhook', async (req, res) => {
 
             if (event === 'subscription.activated') {
                 const subscriptionEntity = payload.subscription.entity;
+                const paymentEntity = payload.payment.entity; // पेमेंट की जानकारी यहाँ से मिलेगी
+                
                 const oldSubscriptionId = subscriptionEntity.id;
-                const customerId = subscriptionEntity.customer_id;
+                const customerId = paymentEntity.customer_id; // Customer ID को पेमेंट से निकालना सबसे सही है
 
                 // यह लॉजिक सिर्फ़ तभी चलेगा जब सब्सक्रिप्शन ₹5 वाले प्लान का हो और उसका कोई ग्राहक हो
                 if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID && customerId) {
                     console.log(`Payment successful for ${oldSubscriptionId}. Now starting background upgrade for customer ${customerId}...`);
                     
-                    // स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को कैंसिल करें
-                    await razorpay.subscriptions.cancel(oldSubscriptionId);
-                    console.log(`Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
+                    // स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को तुरंत कैंसिल करें ताकि दोबारा न कटे
+                    await razorpay.subscriptions.cancel(oldSubscriptionId, { cancel_at_cycle_end: false });
+                    console.log(`Step 1/3: Successfully cancelled activation subscription ${oldSubscriptionId}.`);
                     
-                    // स्टेप 2: उसी ग्राहक के लिए ₹500 का नया सब्सक्रिप्शन बनाएं
+                    // --- यही सबसे ज़रूरी बदलाव है ---
+                    // स्टेप 2: 1 घंटे बाद का समय निकालें (Unix Timestamp में)
+                    const now = new Date();
+                    const startTime = new Date(now.getTime() + 60 * 60 * 1000); // अभी से ठीक 1 घंटे बाद
+                    const startAtTimestamp = Math.floor(startTime.getTime() / 1000); // Razorpay को सेकंड्स में टाइम चाहिए
+                    
+                    console.log(`Step 2/3: Scheduling main subscription to start at ${startTime.toISOString()}`);
+
+                    // स्टेप 3: उसी ग्राहक के लिए ₹500 का नया सब्सक्रिप्शन बनाएं जो 1 घंटे बाद शुरू होगा
                     const newSubscription = await razorpay.subscriptions.create({
                         plan_id: MAIN_PLAN_ID,
                         customer_id: customerId,
-                        total_count: 48,
+                        total_count: 48, // 4 साल तक चलेगा
+                        start_at: startAtTimestamp // यह Razorpay को बताएगा कि इसे कब शुरू करना है
                     });
-                    console.log(`✅ Upgrade Complete! New ₹500 subscription is ${newSubscription.id}`);
+                    console.log(`✅ UPGRADE SCHEDULED! New ₹500 subscription ${newSubscription.id} will start in 1 hour.`);
                     
-                    // Firebase में नए वाले सब्सक्रिप्शन का रिकॉर्ड बना दें
+                    // Firebase में नए वाले (शेड्यूल हुए) सब्सक्रिप्शन का रिकॉर्ड बना दें
                     const ref = db.ref('active_subscriptions/' + newSubscription.id);
                     await ref.set({
                         subscriptionId: newSubscription.id,
                         customerId: customerId,
-                        status: 'active',
+                        status: newSubscription.status, // इसका स्टेटस 'created' होगा, 'active' नहीं
                         planId: MAIN_PLAN_ID,
-                        createdAt: new Date().toISOString()
+                        scheduledAt: new Date().toISOString(),
+                        startsAt: startTime.toISOString() // यह भी सेव कर लें ताकि पता रहे कब शुरू होगा
                     });
-                    console.log("✅ Firebase record created for the new subscription.");
+                    console.log("✅ Firebase record created for the new scheduled subscription.");
                 }
             }
             res.json({ status: 'ok' });
