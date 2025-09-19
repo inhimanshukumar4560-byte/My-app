@@ -125,8 +125,8 @@ app.post('/webhook', async (req, res) => {
 app.get('/api/fix-my-subscription-once-and-for-all', async (req, res) => {
     
     // --- आपकी IDs यहाँ पहले से डाल दी गई हैं ---
-    const oldSubscriptionId = 'sub_RJNRkZmXf5WSFT';
-    const customerIdToFix   = 'cust_RJNRiv8jWUTsnu';
+    const oldSubscriptionId = 'sub_RJRXSyu36BkmzZ'; // <-- मैंने इसे आपकी दी गई ID से बदल दिया है
+    const customerIdToFix   = 'cust_RJRXRO4Yz9CA7g'; // <-- और इसे भी आपकी दी गई ID से बदल दिया है
     // -----------------------------------------
 
     try {
