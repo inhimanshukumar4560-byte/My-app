@@ -40,25 +40,45 @@ app.use(cors());
 app.use(express.json());
 
 // --- आपकी प्लान IDs ---
-const ACTIVATION_PLAN_ID = 'plan_RIgEjuqVIyUaRa'; // आपकी नई वाली ₹5 की Plan ID
-const MAIN_PLAN_ID = 'plan_RFqNX97VOfwJwl';       // यह ₹500 वाला प्लान सही है
+const ACTIVATION_PLAN_ID = 'plan_RIgEjuqVIyUaRa'; // आपकी ₹5 वाली Plan ID
+const MAIN_PLAN_ID = 'plan_RFqNX97VOfwJwl';       // आपका ₹500 वाला प्लान
 
 // --- API ENDPOINTS ---
 
-// === सब्सक्रिप्शन बनाने का सबसे सरल और भरोसेमंद तरीका ===
-// यह ठीक आपके पुराने js की तरह काम करेगा ताकि पेमेंट फेल न हो
+// === सब्सक्रिप्शन बनाने का नया और सबसे सही तरीका ===
+// यह पहले Customer ID बनाएगा, फिर सब्सक्रिप्शन बनाएगा
 app.post('/create-subscription', async (req, res) => {
     try {
-        console.log("Creating a simple subscription to ensure payment success...");
-        
+        // **ज़रूरी**: आपको अपने ऐप से ग्राहक का ईमेल या फ़ोन नंबर यहाँ भेजना होगा
+        const { customer_email, customer_phone, customer_name } = req.body;
+
+        if (!customer_email && !customer_phone) {
+            return res.status(400).json({ error: 'Customer email or phone is required.' });
+        }
+
+        console.log("Step 1/2: Creating a new customer...");
+
+        // *** यही सबसे ज़रूरी बदलाव है ***
+        // स्टेप 1: पहले Razorpay पर एक Customer बनाएँ
+        const customer = await razorpay.customers.create({
+            name: customer_name || 'New User',
+            email: customer_email,
+            contact: customer_phone,
+        });
+
+        console.log(`Successfully created customer with ID: ${customer.id}`);
+        console.log("Step 2/2: Creating subscription for the new customer...");
+
+        // स्टेप 2: अब इस Customer ID का इस्तेमाल करके सब्सक्रिप्शन बनाएँ
         const subscriptionOptions = {
-            plan_id: ACTIVATION_PLAN_ID, // सिर्फ़ प्लान ID से सब्सक्रिप्शन बनाना
+            plan_id: ACTIVATION_PLAN_ID, // ₹5 वाला प्लान
             total_count: 48,
             customer_notify: 1,
+            customer_id: customer.id // **यहाँ हमने पहले से बनी ID का इस्तेमाल किया**
         };
         const subscription = await razorpay.subscriptions.create(subscriptionOptions);
         
-        console.log(`Successfully created subscription ${subscription.id}. Now waiting for payment.`);
+        console.log(`Successfully created subscription ${subscription.id} for customer ${customer.id}.`);
         
         res.json({
             subscription_id: subscription.id,
@@ -73,7 +93,7 @@ app.post('/create-subscription', async (req, res) => {
 
 
 // === Webhook का फाइनल लॉजिक (पर्दे के पीछे का जादू) ===
-// यह फंक्शन पेमेंट के बाद आराम से अपना काम करेगा
+// यह फंक्शन पेमेंट के बाद आराम से अपना काम करेगा (इसमें कोई बदलाव की ज़रूरत नहीं थी)
 app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
@@ -90,15 +110,15 @@ app.post('/webhook', async (req, res) => {
             if (event === 'subscription.activated') {
                 const subscriptionEntity = payload.subscription.entity;
                 const oldSubscriptionId = subscriptionEntity.id;
-                const customerId = subscriptionEntity.customer_id;
+                const customerId = subscriptionEntity.customer_id; // अब हमें ID सब्सक्रिप्शन से ही मिल जाएगी
 
                 // यह लॉजिक सिर्फ़ तभी चलेगा जब सब्सक्रिप्शन ₹5 वाले प्लान का हो और उसका कोई ग्राहक हो
                 if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID && customerId) {
-                    console.log(`Payment successful for ${oldSubscriptionId}. Now starting background upgrade for customer ${customerId}...`);
+                    console.log(`Payment successful for ${oldSubscriptionId}. Now starting upgrade for customer ${customerId}...`);
                     
-                    // स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को कैंसिल करें
-                    await razorpay.subscriptions.cancel(oldSubscriptionId);
-                    console.log(`Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
+                    // स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को तुरंत कैंसिल करें
+                    await razorpay.subscriptions.cancel(oldSubscriptionId, { cancel_at_cycle_end: false });
+                    console.log(`Step 1/2: Successfully cancelled activation subscription ${oldSubscriptionId}.`);
                     
                     // स्टेप 2: उसी ग्राहक के लिए ₹500 का नया सब्सक्रिप्शन बनाएं
                     const newSubscription = await razorpay.subscriptions.create({
@@ -134,5 +154,5 @@ app.post('/webhook', async (req, res) => {
 // सर्वर को स्टार्ट करना
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`🚀 Your server is now permanently fixed and running on port ${PORT}`);
+    console.log(`🚀 Your server is now running correctly on port ${PORT}`);
 });
