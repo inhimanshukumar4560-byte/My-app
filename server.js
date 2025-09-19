@@ -6,18 +6,16 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 require('dotenv').config();
 
-// --- सुरक्षित शुरुआत: सर्वर शुरू होने पर जाँच ---
-// यह सुनिश्चित करता है कि आपकी सारी Keys Render पर मौजूद हैं
+// --- सुरक्षित शुरुआत ---
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || !process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    console.error("FATAL ERROR: Environment variables are missing. Please check RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, and FIREBASE_SERVICE_ACCOUNT_JSON on Render.");
-    process.exit(1); // सर्वर को बंद कर दें अगर कोई Key मौजूद नहीं है
+    console.error("FATAL ERROR: Environment variables are missing.");
+    process.exit(1);
 }
 
-// --- Firebase और Razorpay का सुरक्षित सेटअप ---
+// --- Firebase और Razorpay का सेटअप ---
 let db, razorpay;
 try {
-    const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    const serviceAccount = JSON.parse(serviceAccountString);
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
       databaseURL: "https://conceptra-c1000-default-rtdb.firebaseio.com"
@@ -28,114 +26,106 @@ try {
         key_secret: process.env.RAZORPAY_KEY_SECRET,
     });
     console.log("✅ Firebase and Razorpay initialized successfully.");
-} catch (error)
-{
+} catch (error) {
     console.error("❌ SETUP FAILED:", error.message);
     process.exit(1);
 }
 
-// Express ऐप बनाना
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- आपकी प्लान IDs ---
-const ACTIVATION_PLAN_ID = 'plan_RIgEjuqVIyUaRa'; // आपकी नई वाली ₹5 की Plan ID
-const MAIN_PLAN_ID = 'plan_RFqNX97VOfwJwl';       // यह ₹500 वाला प्लान सही है
+const ACTIVATION_PLAN_ID = 'plan_RIgEjuqVIyUaRa';
+const MAIN_PLAN_ID = 'plan_RFqNX97VOfwJwl';
 
-// --- API ENDPOINTS ---
-
-// === सब्सक्रिप्शन बनाने का सबसे सरल और भरोसेमंद तरीका ===
+// === सब्सक्रिप्शन बनाना ===
 app.post('/create-subscription', async (req, res) => {
     try {
-        console.log("Creating a simple subscription to ensure payment success...");
-        
-        const subscriptionOptions = {
-            plan_id: ACTIVATION_PLAN_ID, // सिर्फ़ प्लान ID से सब्सक्रिप्शन बनाना
+        console.log("Creating subscription...");
+        const subscription = await razorpay.subscriptions.create({
+            plan_id: ACTIVATION_PLAN_ID,
             total_count: 48,
             customer_notify: 1,
-        };
-        const subscription = await razorpay.subscriptions.create(subscriptionOptions);
-        
-        console.log(`Successfully created subscription ${subscription.id}. Now waiting for payment.`);
-        
+        });
         res.json({
             subscription_id: subscription.id,
             key_id: process.env.RAZORPAY_KEY_ID
         });
-
     } catch (error) {
-        console.error("Error during /create-subscription:", error);
         res.status(500).json({ error: 'Failed to create subscription.' });
     }
 });
 
-
-// === Webhook का फाइनल लॉजिक (पर्दे के पीछे का जादू) ===
+// =========================================================================
+// ==================== WEBHOOK का नया और भरोसेमंद लॉजिक ====================
+// =========================================================================
 app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
-    
-    // =================================================================
-    // =========== DEBUGGING CODE: यह हमें असली समस्या बताएगा ===========
-    // =================================================================
-    console.log('--- [DEBUG] INCOMING WEBHOOK RECEIVED ---');
-    console.log('[DEBUG] Secret Key being used by Server:', secret);
-    console.log('[DEBUG] Signature received from Razorpay:', signature);
-    console.log('--- [DEBUG] END OF DIAGNOSTIC DATA ---');
-    // =================================================================
-
     try {
         const shasum = crypto.createHmac('sha256', secret);
         shasum.update(JSON.stringify(req.body));
         const digest = shasum.digest('hex');
 
-        if (digest === signature) {
-            const event = req.body.event;
-            const payload = req.body.payload;
-            console.log('✅ Webhook Verified. Processing event:', event);
+        if (digest !== signature) {
+            console.warn('❌ Webhook verification failed.');
+            return res.status(400).json({ error: 'Invalid signature.' });
+        }
+        
+        console.log('✅ Webhook Verified. Processing event:', req.body.event);
+        
+        // --- यह है सबसे बड़ा बदलाव ---
+        // अब हम payment.captured इवेंट को भी सुनेंगे
+        if (req.body.event === 'payment.captured') {
+            const paymentEntity = req.body.payload.payment.entity;
+            
+            // हम सिर्फ़ तभी आगे बढ़ेंगे जब यह पेमेंट किसी सब्सक्रिप्शन का हो
+            if (paymentEntity.invoice_id && paymentEntity.customer_id) {
+                // रेजरपे से सब्सक्रिप्शन की पूरी जानकारी निकालें
+                const invoice = await razorpay.invoices.fetch(paymentEntity.invoice_id);
+                
+                if (invoice.subscription_id) {
+                    const subscriptionEntity = await razorpay.subscriptions.fetch(invoice.subscription_id);
 
-            if (event === 'subscription.activated') {
-                const subscriptionEntity = payload.subscription.entity;
-                const oldSubscriptionId = subscriptionEntity.id;
-                const customerId = subscriptionEntity.customer_id;
-
-                if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID && customerId) {
-                    console.log(`Payment successful for ${oldSubscriptionId}. Now starting background upgrade for customer ${customerId}...`);
-                    
-                    await razorpay.subscriptions.cancel(oldSubscriptionId);
-                    console.log(`Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
-                    
-                    const newSubscription = await razorpay.subscriptions.create({
-                        plan_id: MAIN_PLAN_ID,
-                        customer_id: customerId,
-                        total_count: 48,
-                    });
-                    console.log(`✅ Upgrade Complete! New ₹500 subscription is ${newSubscription.id}`);
-                    
-                    const ref = db.ref('active_subscriptions/' + newSubscription.id);
-                    await ref.set({
-                        subscriptionId: newSubscription.id,
-                        customerId: customerId,
-                        status: 'active',
-                        planId: MAIN_PLAN_ID,
-                        createdAt: new Date().toISOString()
-                    });
-                    console.log("✅ Firebase record created for the new subscription.");
+                    // यह लॉजिक सिर्फ़ ₹5 वाले प्लान के लिए चलेगा
+                    if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID) {
+                        const oldSubscriptionId = subscriptionEntity.id;
+                        const customerId = subscriptionEntity.customer_id;
+                        
+                        console.log(`Payment captured for ${oldSubscriptionId}. Starting upgrade for customer ${customerId}...`);
+                        
+                        await razorpay.subscriptions.cancel(oldSubscriptionId);
+                        console.log(`Step 1/2: Successfully cancelled old subscription ${oldSubscriptionId}.`);
+                        
+                        const newSubscription = await razorpay.subscriptions.create({
+                            plan_id: MAIN_PLAN_ID,
+                            customer_id: customerId,
+                            total_count: 48,
+                        });
+                        console.log(`✅ Upgrade Complete! New ₹500 subscription is ${newSubscription.id}`);
+                        
+                        const ref = db.ref('active_subscriptions/' + newSubscription.id);
+                        await ref.set({
+                            subscriptionId: newSubscription.id,
+                            customerId: customerId,
+                            status: 'active',
+                            planId: MAIN_PLAN_ID,
+                            createdAt: new Date().toISOString()
+                        });
+                        console.log("✅ Firebase record created for the new subscription.");
+                    }
                 }
             }
-            res.json({ status: 'ok' });
-        } else {
-            console.warn('❌ Webhook verification failed. Please check your secret key.');
-            res.status(400).json({ error: 'Invalid signature.' });
         }
+        
+        res.json({ status: 'ok' });
+
     } catch (error) {
-        console.error("❌ Webhook processing error:", error);
+        console.error("❌ Webhook processing error:", error.message, error.stack);
         res.status(500).send('Webhook error.');
     }
 });
 
-// सर्वर को स्टार्ट करना
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`🚀 Your server is now permanently fixed and running on port ${PORT}`);
