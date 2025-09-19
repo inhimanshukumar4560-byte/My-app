@@ -45,7 +45,7 @@ const MAIN_PLAN_ID = "plan_RFqNX97VOfwJwl";       // ₹500 वाला प्�
 
 // --- API ENDPOINTS ---
 
-// === भविष्य के ग्राहकों के लिए स्थायी समाधान ===
+// === भविष्य के ग्राहकों के लिए स्थायी समाधान (अपडेट किया गया) ===
 app.post('/create-subscription', async (req, res) => {
     try {
         // स्टेप 1: हमेशा पहले एक नया कस्टमर बनाएं
@@ -56,15 +56,25 @@ app.post('/create-subscription', async (req, res) => {
         });
         console.log(`Step 1/2: Created new customer: ${customer.id}`);
 
-        // स्टेप 2: अब उस कस्टमर के लिए सब्सक्रिप्शन बनाएं और उसे customer_id से जोड़ें
+        // स्टेप 2: अब उस कस्टमर के लिए सब्सक्रिप्शन बनाएं
         const subscriptionOptions = {
             plan_id: ACTIVATION_PLAN_ID,
             total_count: 48,
-            customer_id: customer.id, // <-- यह है वह लाइन जो सारी समस्याओं को रोकती है
+            customer_id: customer.id,
             customer_notify: 1,
+            
+            // ====================== पहला और सबसे ज़रूरी बदलाव ======================
+            // यह Razorpay को बताएगा कि ग्राहक से ₹500 तक की Autopay लिमिट की मंजूरी लेनी है,
+            // भले ही पहला पेमेंट सिर्फ ₹5 का हो।
+            subscription_registration: {
+                method: 'upi',
+                auth_type: 'initial',
+                max_amount: 50000 // 500 रुपये (500 * 100 पैसे)
+            }
+            // ======================================================================
         };
         const subscription = await razorpay.subscriptions.create(subscriptionOptions);
-        console.log(`Step 2/2: Created subscription ${subscription.id} AND LINKED it to customer ${customer.id}.`);
+        console.log(`Step 2/2: Created subscription ${subscription.id} with a ₹500 mandate limit.`);
         
         res.json({
             subscription_id: subscription.id,
@@ -78,7 +88,7 @@ app.post('/create-subscription', async (req, res) => {
 });
 
 
-// === भविष्य के ग्राहकों के लिए Webhook का स्थायी लॉजिक ===
+// === भविष्य के ग्राहकों के लिए Webhook का स्थायी लॉजिक (अपडेट किया गया) ===
 app.post('/webhook', async (req, res) => {
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
     const signature = req.headers['x-razorpay-signature'];
@@ -98,13 +108,33 @@ app.post('/webhook', async (req, res) => {
                 const customerId = subscriptionEntity.customer_id;
 
                 if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID && customerId) {
+                    
+                    // ====================== दूसरा और अंतिम बदलाव ======================
+                    // यह अब सब्सक्रिप्शन को अपग्रेड करेगा और पहले महीने का ₹500 तुरंत चार्ज करेगा।
+
+                    // --- स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को तुरंत कैंसिल करें ---
                     await razorpay.subscriptions.cancel(oldSubscriptionId);
+                    console.log(`✅ Step 1/3: Cancelled old activation subscription ${oldSubscriptionId}.`);
+                    
+                    // --- स्टेप 2: उसी ग्राहक के लिए ₹500 का नया सब्सक्रिप्शन बनाएं ---
                     const newSubscription = await razorpay.subscriptions.create({
                         plan_id: MAIN_PLAN_ID,
                         customer_id: customerId,
                         total_count: 48,
                     });
-                    console.log(`✅ Upgrade Complete! New ₹500 subscription is ${newSubscription.id}`);
+                    console.log(`✅ Step 2/3: Created new ₹500 subscription ${newSubscription.id}.`);
+
+                    // --- स्टेप 3: पहले महीने का ₹500 तुरंत चार्ज करने के लिए एक "Add-on" बनाएं ---
+                    await razorpay.subscriptions.createAddon(newSubscription.id, {
+                        item: {
+                            name: 'First Month Subscription Fee',
+                            amount: 50000, // राशि पैसे में (500 * 100)
+                            currency: 'INR'
+                        },
+                        quantity: 1
+                    });
+                    console.log(`✅ Step 3/3: Created an immediate ₹500 add-on charge.`);
+                    // ======================================================================
                 }
             }
             res.json({ status: 'ok' });
@@ -121,16 +151,17 @@ app.post('/webhook', async (req, res) => {
 
 // ==============================================================================
 // === स्पेशल वन-टाइम फिक्स (आपके मौजूदा सब्सक्रिप्शन के लिए) ===
+// यह कोड वैसा ही है जैसा था, ताकि आप किसी पुराने अटके हुए ग्राहक को ठीक कर सकें।
 // ==============================================================================
 app.get('/api/fix-my-subscription-once-and-for-all', async (req, res) => {
     
-    // --- आपकी IDs यहाँ पहले से डाल दी गई हैं ---
-    const oldSubscriptionId = 'sub_RJRXSyu36BkmzZ'; // <-- मैंने इसे आपकी दी गई ID से बदल दिया है
-    const customerIdToFix   = 'cust_RJRXRO4Yz9CA7g'; // <-- और इसे भी आपकी दी गई ID से बदल दिया है
+    // --- अपनी IDs यहाँ डालें अगर किसी को मैन्युअल फिक्स करना हो ---
+    const oldSubscriptionId = 'sub_RJNRkZmXf5WSFT';
+    const customerIdToFix   = 'cust_RJNRiv8jWUTsnu';
     // -----------------------------------------
 
     try {
-        console.log(`--- FINAL FIX INITIATED for customer ${customerIdToFix} ---`);
+        console.log(`--- MANUAL FIX INITIATED for customer ${customerIdToFix} ---`);
         
         // स्टेप 1: पुराने ₹5 वाले सब्सक्रिप्शन को कैंसिल करें
         await razorpay.subscriptions.cancel(oldSubscriptionId);
@@ -147,7 +178,7 @@ app.get('/api/fix-my-subscription-once-and-for-all', async (req, res) => {
         res.send(`<h1>SUCCESS. IT IS DONE.</h1><p>The old subscription was cancelled and a new ₹500 subscription (${newSubscription.id}) has been created. No new payment was needed. I am truly sorry for all the trouble this has caused.</p>`);
 
     } catch (error) {
-        console.error('--- FINAL FIX FAILED ---', error);
+        console.error('--- MANUAL FIX FAILED ---', error);
         res.status(500).send(`<h1>Error!</h1><p><b>Details:</b> ${error.error ? error.error.description : error.message}</p>`);
     }
 });
