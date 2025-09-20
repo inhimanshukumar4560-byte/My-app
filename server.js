@@ -34,7 +34,7 @@ try {
 const app = express();
 app.use(cors());
 
-// आपकी दोनों TEST PLAN IDs
+// आपकी TEST PLAN ID
 const MAIN_PLAN_ID = 'plan_RJY2rfogWKazn1'; // सिर्फ ₹500 वाली Test Plan ID
 
 // सब्सक्रिप्शन बनाने का नया और सही तरीका
@@ -82,41 +82,35 @@ app.post('/create-subscription', express.json(), async (req, res) => {
 });
 
 
-// WEBHOOK का रास्ता (असुरक्षित मोड में, सिर्फ टेस्टिंग के लिए)
+// =========================================================================
+// ==================== WEBHOOK का सबसे सरल और फाइनल लॉजिक =================
+// =========================================================================
 app.post('/webhook', express.json(), async (req, res) => {
     console.log("--- [चेतावनी: असुरक्षित मोड] ---");
     console.log("वेबहुक मिला। सिग्नेचर की जाँच नहीं की जा रही है।");
 
     try {
         const body = req.body;
-        console.log('वेबहुक का इवेंट:', body.event);
+        const event = body.event;
+        console.log('वेबहुक का इवेंट:', event);
         
-        if (body.event === 'subscription.activated' || (body.event === 'payment.captured' && body.payload.payment.entity.invoice_id)) {
+        // हम सिर्फ तभी काम करेंगे जब सब्सक्रिप्शन एक्टिवेट हो
+        if (event === 'subscription.activated') {
             
-            let subscriptionId, customerId;
-
-            if(body.event === 'subscription.activated') {
-                subscriptionId = body.payload.subscription.entity.id;
-                customerId = body.payload.subscription.entity.customer_id;
-            } else {
-                 const invoice = await razorpay.invoices.fetch(body.payload.payment.entity.invoice_id);
-                 if (invoice.subscription_id) {
-                    subscriptionId = invoice.subscription_id;
-                    customerId = invoice.customer_id;
-                 }
-            }
-
+            const subscriptionEntity = body.payload.subscription.entity;
+            const subscriptionId = subscriptionEntity.id;
+            const customerId = subscriptionEntity.customer_id;
+            
             if(subscriptionId && customerId) {
                 console.log(`✅ VICTORY! Subscription ${subscriptionId} for customer ${customerId} is now active.`);
                 
-                // --- यही है वह लाइन जो ठीक कर दी गई है ---
                 const ref = db.ref('active_subscriptions/' + subscriptionId);
                 await ref.set({
                     subscriptionId: subscriptionId,
                     customerId: customerId,
                     status: 'active',
                     planId: MAIN_PLAN_ID,
-                    createdAt: new Date().toISOString()
+                    activatedAt: new Date().toISOString()
                 });
                 console.log("✅✅✅ Firebase record created.");
             }
@@ -133,5 +127,5 @@ app.post('/webhook', express.json(), async (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`🚀 सर्वर पोर्ट ${PORT} पर लाइव है (स्मार्ट मोड में)।`);
+    console.log(`🚀 सर्वर पोर्ट ${PORT} पर लाइव है (सबसे सरल मोड में)।`);
 });
