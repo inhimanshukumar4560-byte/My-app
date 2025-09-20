@@ -35,12 +35,9 @@ const app = express();
 app.use(cors());
 
 // आपकी दोनों TEST PLAN IDs
-// अब हमें ₹5 के प्लान की ज़रूरत नहीं है!
 const MAIN_PLAN_ID = 'plan_RJY2rfogWKazn1'; // सिर्फ ₹500 वाली Test Plan ID
 
-// =========================================================================
-// ==================== सब्सक्रिप्शन बनाने का नया और सही तरीका =================
-// =========================================================================
+// सब्सक्रिप्शन बनाने का नया और सही तरीका
 app.post('/create-subscription', express.json(), async (req, res) => {
     try {
         console.log("Creating a new customer on Razorpay...");
@@ -50,21 +47,20 @@ app.post('/create-subscription', express.json(), async (req, res) => {
         });
         console.log(`✅ Customer created successfully: ${customer.id}`);
 
-        // अभी से ठीक 1 घंटे बाद का समय निकालना (3600 सेकंड)
         const startTimeInFuture = Math.floor(Date.now() / 1000) + 3600;
 
         console.log(`Creating a ₹500 subscription for customer ${customer.id} with a ₹5 activation fee...`);
         
         const subscription = await razorpay.subscriptions.create({
-            plan_id: MAIN_PLAN_ID, // हम सीधे ₹500 का प्लान बना रहे हैं
+            plan_id: MAIN_PLAN_ID,
             customer_id: customer.id,
             total_count: 48,
-            start_at: startTimeInFuture, // पहला ₹500 का चार्ज 1 घंटे बाद होगा
-            addons: [ // --- यही है असली जादू ---
+            start_at: startTimeInFuture,
+            addons: [
                 {
                     item: {
                         name: "Activation Fee",
-                        amount: 500, // 500 पैसे = ₹5
+                        amount: 500,
                         currency: "INR"
                     }
                 }
@@ -95,7 +91,6 @@ app.post('/webhook', express.json(), async (req, res) => {
         const body = req.body;
         console.log('वेबहुक का इवेंट:', body.event);
         
-        // अब हमें सिर्फ यह रिकॉर्ड करना है कि सब्सक्रिप्शन शुरू हो गया है
         if (body.event === 'subscription.activated' || (body.event === 'payment.captured' && body.payload.payment.entity.invoice_id)) {
             
             let subscriptionId, customerId;
@@ -114,7 +109,8 @@ app.post('/webhook', express.json(), async (req, res) => {
             if(subscriptionId && customerId) {
                 console.log(`✅ VICTORY! Subscription ${subscriptionId} for customer ${customerId} is now active.`);
                 
-                const ref = db.ref('active_subscriptions/' a+ subscriptionId);
+                // --- यही है वह लाइन जो ठीक कर दी गई है ---
+                const ref = db.ref('active_subscriptions/' + subscriptionId);
                 await ref.set({
                     subscriptionId: subscriptionId,
                     customerId: customerId,
