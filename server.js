@@ -35,10 +35,9 @@ const app = express();
 app.use(cors());
 
 // ===================================================================
-// ==================== आपकी दोनों LIVE PLAN IDs यहाँ हैं ==================
+// ==================== सिर्फ एक LIVE PLAN ID की ज़रूरत है ==================
 // ===================================================================
-const ACTIVATION_PLAN_ID = 'plan_RJTkhdu5HZemLI'; // आपकी ₹5 वाली Live Plan ID
-const MAIN_PLAN_ID = 'plan_RFqNX97VOfwJwl';       // आपकी ₹500 वाली Live Plan ID
+const MAIN_PLAN_ID = 'plan_RFqNX97VOfwJwl'; // सिर्फ आपकी ₹500 वाली Live Plan ID
 // ===================================================================
 
 
@@ -52,7 +51,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         shasum.update(req.body); 
         const digest = shasum.digest('hex');
 
-        // सुरक्षा के लिए वेरिफिकेशन को वापस चालू कर दिया गया है
         if (digest !== signature) {
             console.warn(`❌ SECURITY ALERT: Webhook verification failed. Request rejected.`);
             return res.status(400).json({ error: 'Invalid signature.' });
@@ -61,47 +59,23 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const body = JSON.parse(req.body.toString());
         console.log('✅ Webhook Verified. Processing event:', body.event);
         
-        if (body.event === 'payment.captured') {
-            const paymentEntity = body.payload.payment.entity;
-            
-            if (paymentEntity.invoice_id) { 
-                const invoice = await razorpay.invoices.fetch(paymentEntity.invoice_id);
+        if (body.event === 'subscription.activated') {
+            const subscriptionEntity = body.payload.subscription.entity;
+            const subscriptionId = subscriptionEntity.id;
+            const customerId = subscriptionEntity.customer_id;
+
+            if(subscriptionId && customerId) {
+                console.log(`✅ VICTORY! LIVE Subscription ${subscriptionId} for customer ${customerId} is now active.`);
                 
-                if (invoice.subscription_id) {
-                    const subscriptionEntity = await razorpay.subscriptions.fetch(invoice.subscription_id);
-                    const customerId = invoice.customer_id;
-
-                    if (subscriptionEntity.plan_id === ACTIVATION_PLAN_ID && customerId) {
-                        const oldSubscriptionId = subscriptionEntity.id;
-                        
-                        console.log(`LIVE: Payment captured for ${oldSubscriptionId}. Upgrading customer ${customerId}...`);
-                        
-                        await razorpay.subscriptions.cancel(oldSubscriptionId);
-                        console.log(`LIVE: Step 1/2: Cancelled old subscription ${oldSubscriptionId}.`);
-                        
-                        const startTimeInFuture = Math.floor(Date.now() / 1000) + 3600;
-
-                        const newSubscription = await razorpay.subscriptions.create({
-                            plan_id: MAIN_PLAN_ID,
-                            customer_id: customerId,
-                            total_count: 48,
-                            start_at: startTimeInFuture 
-                        });
-
-                        console.log(`✅ VICTORY! LIVE Upgrade Complete! New ₹500 subscription ${newSubscription.id} is scheduled.`);
-                        
-                        const ref = db.ref('active_subscriptions/' + newSubscription.id);
-                        await ref.set({
-                            subscriptionId: newSubscription.id,
-                            customerId: customerId,
-                            status: 'scheduled',
-                            planId: MAIN_PLAN_ID,
-                            createdAt: new Date().toISOString(),
-                            startsAt: new Date(startTimeInFuture * 1000).toISOString()
-                        });
-                        console.log("✅ LIVE: Firebase record created.");
-                    }
-                }
+                const ref = db.ref('active_subscriptions/' + subscriptionId);
+                await ref.set({
+                    subscriptionId: subscriptionId,
+                    customerId: customerId,
+                    status: 'active',
+                    planId: MAIN_PLAN_ID,
+                    activatedAt: new Date().toISOString()
+                });
+                console.log("✅✅✅ LIVE: Firebase record created.");
             }
         }
         
@@ -117,7 +91,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 // बाकी रास्तों के लिए JSON Parser
 app.use(express.json());
 
-// === सब्सक्रिप्शन बनाने का Foolproof तरीका ===
+// === सब्सक्रिप्शन बनाने का सबसे सही और फाइनल तरीका ===
 app.post('/create-subscription', async (req, res) => {
     try {
         console.log("LIVE: Creating a new customer...");
@@ -127,13 +101,27 @@ app.post('/create-subscription', async (req, res) => {
         });
         console.log(`LIVE: Customer created: ${customer.id}`);
 
-        console.log(`LIVE: Creating subscription for customer ${customer.id}...`);
+        const startTimeInFuture = Math.floor(Date.now() / 1000) + 3600;
+
+        console.log(`LIVE: Creating a ₹500 subscription for customer ${customer.id} with a ₹5 activation fee...`);
+        
         const subscription = await razorpay.subscriptions.create({
-            plan_id: ACTIVATION_PLAN_ID,
+            plan_id: MAIN_PLAN_ID,
             customer_id: customer.id,
             total_count: 48,
+            start_at: startTimeInFuture,
+            addons: [
+                {
+                    item: {
+                        name: "Activation Fee",
+                        amount: 500, // 500 पैसे = ₹5
+                        currency: "INR"
+                    }
+                }
+            ],
             customer_notify: 1,
         });
+        
         console.log("LIVE: Subscription created successfully:", subscription.id);
         
         res.json({
